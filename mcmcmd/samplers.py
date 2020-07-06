@@ -1,6 +1,6 @@
 import numpy as onp
 import jax.numpy as np
-from scipy.stats import invwishart, norm, reciprocal, t
+from scipy.stats import invwishart, laplace, norm, reciprocal, t
 from scipy.special import comb, loggamma, multigammaln
 import multiprocessing
 from itertools import repeat
@@ -941,6 +941,8 @@ class gaussian_mixture_sampler(model_sampler):
 RJ Bayesian Lasso
 Model based on (Chen, Wang, and McKeown 2011), with approximate sampling method from (Korattikara, Chen, and Welling 2014)
 '''
+
+
 class bayes_lasso_sampler(model_sampler):
     def __init__(self, **kwargs):
       self._mode = 'exact'
@@ -951,12 +953,13 @@ class bayes_lasso_sampler(model_sampler):
           assert hasattr(self, attr)
       self._n = int(self._n)
       self._p = int(self._p)
-      assert onp.all(onp.array([self._n, self._p, self._Lambda, self._tau, self._sigma, self._epsilon_update, self._epsilon_birth])>0)
+      assert onp.all(onp.array([self._n, self._p, self._Lambda, self._tau,
+                                self._sigma, self._epsilon_update, self._epsilon_birth]) > 0)
       assert self._mode in ('exact', 'approx')
       if self._mode == 'approx':
         assert hasattr(self, '_epsilon_approx')
         assert hasattr(self, '_batch_size')
-        assert onp.all(onp.array([self._epsilon_approx, self._batch_size])>0)
+        assert onp.all(onp.array([self._epsilon_approx, self._batch_size]) > 0)
       pass
 
     @property
@@ -968,62 +971,72 @@ class bayes_lasso_sampler(model_sampler):
     def theta_indices(self):
       return onp.arange(self._n, self._n + self._p)
 
-    def log_prior(self, beta=None, k=None):
+    def log_prior(self, beta=None, gamma=None, k=None):
       if beta is None:
         beta = self._beta
+      if gamma is None:
+        gamma = self._gamma
       if k is None:
         k = self._k
-      return - onp.log(comb(self._p, k)) - self._Lambda + k*onp.log(self._Lambda) - loggamma(k+1) - k*onp.log(self._tau) - onp.abs(beta).sum()/self._tau
+      # - k*onp.log(self._tau) - onp.abs(beta[gamma,:]).sum()/self._tau
+      return - onp.log(comb(self._p, k)) - self._Lambda + k*onp.log(self._Lambda) - loggamma(k+1) + laplace.logpdf(x=beta[gamma, :], scale=self._tau).sum()
 
     def log_likelihood(self, beta=None, subset=None, return_components=False):
       if beta is None:
-        beta = self._beta      
+        beta = self._beta
       if subset is None:
         subset = onp.arange(self._n)
-      l = norm.logpdf(x=self._y[subset, :], loc=self._X[subset, :]@beta, scale=self._sigma)
+      l = norm.logpdf(x=self._y[subset, :],
+                      loc=self._X[subset, :]@beta, scale=self._sigma)
       if return_components == False:
         l = l.sum()
       return l
 
-    def log_joint(self, beta=None, k=None):
+    def log_joint(self, beta=None, gamma=None, k=None):
       if beta is None:
         beta = self._beta
+      if gamma is None:
+        gamma = self._gamma
       if k is None:
         k = self._k
-      l_prior = self.log_prior(beta, k)
-      l_likelihood = self.log_likelihood()
+      l_prior = self.log_prior(beta=beta, gamma=gamma, k=k)
+      l_likelihood = self.log_likelihood(beta=beta)
       return l_prior + l_likelihood
 
     def drawData(self, rng=None):
       if rng is None:
-          rng = onp.random.Generator(onp.random.MT19937())
+          rng = self._rng_s
 
       self._X = rng.normal(size=[self._n, self._p])
+      self._p_k = onp.exp(onp.arange(1, self._p+1) * onp.log(self._Lambda) -
+                          self._Lambda - loggamma(1+onp.arange(1, self._p+1)))
+      self._p_k = self._p_k/self._p_k.sum()
       pass
 
     def drawPrior(self, rng=None):
       if rng is None:
-          rng = onp.random.Generator(onp.random.MT19937())
+          rng = self._rng_s
 
-      self._beta = onp.zeros(shape=[self._p,1])
-      self._k = 0
-      while self._k < 1 or self._k > self._p:
-        self._k = rng.poisson(lam=self._Lambda)
+      self._beta = onp.zeros(shape=[self._p, 1])
+      self._k = rng.choice(a=onp.arange(1, self._p+1), p=self._p_k)
+
       self._gamma = rng.choice(self._p, size=self._k, replace=False)
-      self._beta[self._gamma, :] = rng.laplace(scale=self._tau, size=[self._k,1])
+      self._beta[self._gamma, :] = rng.laplace(
+          scale=self._tau, size=[self._k, 1])
       return self._beta.flatten()
 
     def drawLikelihood(self, rng=None):
       if rng is None:
-          rng = onp.random.Generator(onp.random.MT19937())
-  
-      self._y = rng.normal(loc=self._X @ self._beta, scale=self._sigma).reshape(self._n, 1)
+          rng = self._rng_s
+
+      self._y = rng.normal(loc=self._X @ self._beta,
+                           scale=self._sigma).reshape(self._n, 1)
       return self._y.flatten()
 
     def drawPosterior(self, rng=None):
       if rng is None:
-          rng = onp.random.Generator(onp.random.MT19937())
-      
+          rng = self._rng_s
+
       j, k_proposal, gamma_proposal, beta_proposal = self.getProposal(rng)
 
       if self._mode == 'exact':
@@ -1038,76 +1051,86 @@ class bayes_lasso_sampler(model_sampler):
       if self._p == 1:
         k_proposal = self._k
       elif self._k == 1:
-        k_proposal = self._k + rng.choice([0,1])
+        k_proposal = self._k + rng.choice([0, 1])
       elif self._k == self._p:
-        k_proposal = self._k + rng.choice([-1,0])
+        k_proposal = self._k + rng.choice([-1, 0])
       else:
-        k_proposal = self._k + rng.choice([-1,0,1]) 
+        k_proposal = self._k + rng.choice([-1, 0, 1])
 
-      if k_proposal == self._k: # update
+      if k_proposal == self._k:  # update
         j = rng.choice(self._gamma)
         gamma_proposal = self._gamma
         beta_proposal[j, :] += rng.normal(scale=self._epsilon_update)
-      elif k_proposal == self._k + 1: # birth
+      elif k_proposal == self._k + 1:  # birth
         j = rng.choice(onp.setdiff1d(onp.arange(self._p), self._gamma))
         gamma_proposal = onp.hstack([self._gamma, j])
         beta_proposal[j, :] = rng.normal(scale=self._epsilon_birth)
-      elif k_proposal == self._k - 1: # death
+      elif k_proposal == self._k - 1:  # death
         j = rng.choice(self._gamma)
         gamma_proposal = self._gamma[self._gamma != j]
         beta_proposal[j, :] = 0.
       return j, k_proposal, gamma_proposal, beta_proposal
 
-
     def gammaProposal_prob(self, gamma, gamma_proposal):
       k = gamma.shape[0]
       k_proposal = gamma_proposal.shape[0]
       prob = 0.
+      if self._p == 1:
+        return prob
       if k == 1 and onp.intersect1d(gamma, gamma_proposal).shape[0] == 1:
-        if k_proposal == k+1: 
+        if k_proposal == k+1:
           prob = 0.5 * 1./(self._p - k)
-        elif k_proposal == k: 
+        elif k_proposal == k:
           prob = 0.5
       elif 1 < k and k < self._p and onp.abs(onp.intersect1d(gamma, gamma_proposal).shape[0] - k) <= 1:
-        if k_proposal == k+1: 
+        if k_proposal == k+1:
           prob = 1./3. * 1./(self._p - k)
         elif k_proposal == k:
           prob = 1./3.
-        elif k_proposal == k-1: 
+        elif k_proposal == k-1:
           prob = 1./3. * 1./k
       elif k == self._p and onp.intersect1d(gamma, gamma_proposal).shape[0] == self._p-1:
-        if k_proposal == k: 
+        if k_proposal == k:
           prob = 0.5
-        elif k_proposal == k-1: 
+        elif k_proposal == k-1:
           prob = 0.5 * 1./k
       return prob
 
     def updateMH(self, j, k_proposal, gamma_proposal, beta_proposal, rng):
-      if k_proposal == self._k: # update
+      if k_proposal == self._k:  # update
         MH_augment = 0.
-      elif k_proposal == self._k + 1: # birth
-        MH_augment = onp.log(self.gammaProposal_prob(gamma_proposal, self._gamma)) - onp.log(self.gammaProposal_prob(self._gamma, gamma_proposal)) - norm.logpdf(beta_proposal[j, :], scale=self._epsilon_birth)
-      elif k_proposal == self._k - 1: # death
-        MH_augment = onp.log(self.gammaProposal_prob(gamma_proposal, self._gamma)) - onp.log(self.gammaProposal_prob(self._gamma, gamma_proposal)) + norm.logpdf(self._beta[j, :], scale=self._epsilon_birth)
+      elif k_proposal == self._k + 1:  # birth
+        MH_augment = onp.log(self.gammaProposal_prob(gamma_proposal, self._gamma)) - onp.log(self.gammaProposal_prob(
+            self._gamma, gamma_proposal)) - float(norm.logpdf(beta_proposal[j, :], scale=self._epsilon_birth))
+      elif k_proposal == self._k - 1:  # death
+        MH_augment = onp.log(self.gammaProposal_prob(gamma_proposal, self._gamma)) - onp.log(self.gammaProposal_prob(
+            self._gamma, gamma_proposal)) + float(norm.logpdf(self._beta[j, :], scale=self._epsilon_birth))
 
-      threshold = self.log_joint(beta=beta_proposal, k=k_proposal) - self.log_joint() + MH_augment
-      if onp.log(rng.uniform()) <= threshold:
+      diff_log_joint = self.log_joint(
+          beta=beta_proposal, gamma=gamma_proposal, k=k_proposal) - self.log_joint()
+      threshold = diff_log_joint + MH_augment
+
+      log_u = onp.log(rng.uniform())
+      if log_u <= threshold:
         self._k = k_proposal
         self._gamma = gamma_proposal
         self._beta = beta_proposal
-      pass
+      return log_u, threshold
 
     def updateApproxMH(self, j, k_proposal, gamma_proposal, beta_proposal, rng):
       # Calculate threshold
       u = rng.uniform()
-      if k_proposal == self._k: # update
+      if k_proposal == self._k:  # update
         MH_augment = 0.
-      elif k_proposal == self._k + 1: # birth
-        MH_augment = -onp.log(self.gammaProposal_prob(gamma_proposal, self._gamma)) + onp.log(self.gammaProposal_prob(self._gamma, gamma_proposal)) + norm.logpdf(beta_proposal[j, :], scale=self._epsilon_birth)
-      elif k_proposal == self._k - 1: # death
-        MH_augment = -onp.log(self.gammaProposal_prob(gamma_proposal, self._gamma)) + onp.log(self.gammaProposal_prob(self._gamma, gamma_proposal)) - norm.logpdf(self._beta[j, :], scale=self._epsilon_birth)
-      
-      threshold = (onp.log(u) + self.log_prior() - self.log_prior(beta=beta_proposal, k=k_proposal) + MH_augment)/self._n
+      elif k_proposal == self._k + 1:  # birth
+        MH_augment = -onp.log(self.gammaProposal_prob(gamma_proposal, self._gamma)) + onp.log(self.gammaProposal_prob(
+            self._gamma, gamma_proposal)) + float(norm.logpdf(beta_proposal[j, :], scale=self._epsilon_birth))
+      elif k_proposal == self._k - 1:  # death
+        MH_augment = -onp.log(self.gammaProposal_prob(gamma_proposal, self._gamma)) + onp.log(self.gammaProposal_prob(
+            self._gamma, gamma_proposal)) - float(norm.logpdf(self._beta[j, :], scale=self._epsilon_birth))
+
+      threshold = (onp.log(u) + self.log_prior() - self.log_prior(beta=beta_proposal,
+                                                                  gamma=gamma_proposal, k=k_proposal) + MH_augment)/self._n
 
       l = 0
       l2 = 0
@@ -1115,21 +1138,24 @@ class bayes_lasso_sampler(model_sampler):
       sample_size = 0
       permutation = rng.permutation(self._n)
       done = False
-      
+
       while not done:
         batch_size = min(self._batch_size, self._n - sample_size)
         batch = permutation[sample_size:(sample_size+batch_size)]
         sample = onp.hstack([sample, batch])
 
-        l_diff = self.log_likelihood(beta=beta_proposal, subset=batch, return_components=True) - self.log_likelihood(subset=batch, return_components=True) 
+        l_diff = self.log_likelihood(beta=beta_proposal, subset=batch, return_components=True) - \
+            self.log_likelihood(subset=batch, return_components=True)
         l += l_diff.sum()
         l2 += (l_diff**2).sum()
-        
+
         sample_size += batch_size
-        
-        l_sd = onp.sqrt((l2/sample_size - (l/sample_size)**2) * sample_size/(sample_size-1))
-        l_se = l_sd/onp.sqrt(sample_size) * onp.sqrt(1-(sample_size-1)/(self._n-1))
-        
+
+        l_sd = onp.sqrt((l2/sample_size - (l/sample_size)**2)
+                        * sample_size/(sample_size-1))
+        l_se = l_sd/onp.sqrt(sample_size) * onp.sqrt(1 -
+                                                     (sample_size-1)/(self._n-1))
+
         if l_se > 0:
           test_stat = onp.abs(l-threshold)/l_se
           delta = 1 - t.cdf(test_stat, sample_size-1)
@@ -1142,20 +1168,4 @@ class bayes_lasso_sampler(model_sampler):
             self._beta = beta_proposal
           done = True
       pass
-      
-'''
-Error 1: do not account for edge cases in gamma proposal transition probabilities
-'''
-class bayes_lasso_sampler_error_1(bayes_lasso_sampler):
-  def gammaProposal_prob(self, gamma, gamma_proposal):
-      k = gamma.shape[0]
-      k_proposal = gamma_proposal.shape[0]
-      if k_proposal == k+1: 
-        prob = 1./3. * 1./(self._p - k)
-      elif k_proposal == k:
-        prob = 1./3.
-      elif k_proposal == k-1: 
-        prob = 1./3. * 1./k
-      return prob
-    
-    
+

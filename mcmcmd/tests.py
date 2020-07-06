@@ -91,10 +91,10 @@ def geweke_test(g_mc, g_sc, alpha, l=0.15, use_bonferroni=False):
     
     result = abs(test_statistic) >= threshold
     p_value = 2.*(1-norm.cdf(abs(test_statistic)))
-    return result, p_value, test_statistic, threshold
+    return {'result': result, 'p_value': p_value, 'test_statistic': test_statistic, 'critical_value': threshold}
 
 '''
-Construct first and second moment test functions for the Geweke test.
+Returns a matrix with column means corresponding to the first and second empirical moments of `samples`.
 '''
 def geweke_functions(samples):
     f1 = samples.copy()
@@ -130,7 +130,6 @@ def prob_plot(x, y, plot_type='PP', step = 0.005):
         qq_y = onp.quantile(y, q)
         plt.plot(qq_x, qq_y, marker='o', color='black', fillstyle='none', linestyle='none')
         plt.plot(qq_x, qq_x, color='black')
-    plt.show()
     pass
 
 #######################################################################
@@ -173,7 +172,7 @@ def mmd_test(samples_p, samples_q, lst_kernels, alpha=0.05, train_test_ratio=1, 
     p_value = mmd.compute_p_value(test_statistic)
     threshold = mmd.compute_threshold(alpha)
     result = p_value <= alpha
-    return result, p_value, test_statistic, threshold, width
+    return {'result': result, 'p_value': p_value, 'test_statistic': test_statistic, 'critical_value': threshold, 'kernel_width':width}
 
 
 #######################################################################
@@ -251,7 +250,7 @@ def mmd_wb_test(X, Y, f_kernel, alpha, null_samples=100, rng=None):
     result = test_statistic >= threshold
     p_value = (B >= test_statistic).mean() # one-sided
     
-    return result, p_value, test_statistic, threshold, B
+    return {'result':result, 'p_value':p_value, 'test_statistic':test_statistic, 'critical_value':threshold}
 
 #######################################################################
 ############################# Experiments #############################
