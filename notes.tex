@@ -1,0 +1,204 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+
+\title{Notes}
+\author{}
+\date{}
+
+\usepackage{amssymb, bm, blkarray, multicol}
+\usepackage{listings,xcolor,lmodern}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+\lstset{
+  basicstyle=\ttfamily,
+  columns=fullflexible,
+  frame=single,
+  breaklines=true,
+  postbreak=\mbox{\textcolor{red}{$\hookrightarrow$}\space},
+}
+
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\var}{\mathrm{Var}}
+\newcommand{\cov}{\mathrm{Cov}}
+\newcommand{\KL}{\mathrm{KL}}
+\newcommand{\neighb}{\text{ne}}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\renewcommand{\thesubsection}{(\alph{subsection})}
+\renewcommand{\thesubsubsection}{(\roman{subsubsection})}
+\newcommand{\Perp}{\mathrel{\text{\scalebox{1.07}{$\perp\mkern-10mu\perp$}}}}
+
+\usetikzlibrary{shapes.geometric}
+
+\begin{document}
+\maketitle
+
+\section{Testing}
+
+\subsection{Geweke}
+Given the model
+\begin{align}
+    p(\mathbf{\theta}, \mathbf{y}) = p(\mathbf{\theta}) P(\mathbf{y} | \mathbf{\theta})
+\end{align}
+Define the test function $g:\mathbf{\Theta} \times \mathbf{Y} \rightarrow \mathbb{R}$ such that $\var(g(\mathbf{\theta}, \mathbf{y})) < \infty$. The Geweke joint distribution test compares two estimates of 
+$\bar{g} = \E[g(\mathbf{\theta}, \mathbf{y})]$ using samples from the joint simulators in Algorithms \ref{alg:mc-sampler} and \ref{alg:sc-sampler}.
+
+\begin{minipage}{0.46\textwidth}
+\begin{algorithm}[H]
+    \centering
+    \caption{marginal-conditional}\label{alg:mc-sampler}
+    \begin{algorithmic}[1]
+        \State \text{Initialize} $\mathbf{g}_{1} \in \mathbb{R}_{M\times 1}$
+        \For{$m = 1, \ldots, M$}
+            \State $\mathbf{\theta}_{m} \sim p(\mathbf{\theta})$ 
+            \State $\mathbf{y}_{m} \sim p(\mathbf{y}|\mathbf{\theta}_{m})$ 
+            \State $\mathbf{g}_{1}[m] = g(\mathbf{\theta}_{m}, \mathbf{y}_{m})$ 
+        \EndFor        
+        \State \textbf{return} $\mathbf{g}_{1}$
+    \end{algorithmic}
+\end{algorithm}
+\end{minipage}
+\hfill
+\begin{minipage}{0.46\textwidth}
+\begin{algorithm}[H]
+    \centering
+    \caption{successive-conditional}\label{alg:sc-sampler}
+    \begin{algorithmic}[1]
+        \State \text{Initialize} $\mathbf{g}_{2} \in \mathbb{R}_{M\times 1}$
+        \State $\mathbf{\theta}_{0} \sim p(\mathbf{\theta})$ 
+        \For{$m = 1, \ldots, M$}
+            \State $\mathbf{y}_{m} \sim p(\mathbf{y}|\mathbf{\theta}_{m-1})$ 
+            \State $\mathbf{\theta}_{m} \sim q(\mathbf{\theta}|\mathbf{\theta}_{m-1}, \mathbf{y}_{m})$ 
+            \State $\mathbf{g}_{2}[m] = g(\mathbf{\theta}_{m}, \mathbf{y}_{m})$ 
+        \EndFor        
+        \State \textbf{return} $\mathbf{g}_{2}$
+    \end{algorithmic}
+\end{algorithm}
+\end{minipage}
+\\
+In particular, 
+\begin{equation}
+    \frac{\hat{\bar{g}}_{1} - \hat{\bar{g}}_{2}}{\sqrt{ \frac{\hat{\sigma}^{2}_{1}}{M_{1}} + \frac{\hat{\sigma}^{2}_{2}}{M_{2}}}} \xrightarrow[]{d} \mathcal{N}(0, 1)
+\end{equation}
+with the mean estimates given by
+\begin{align*}
+    \hat{\bar{g}}_{1} = \frac{1}{M}\sum_{m=1}^{M}g_{1}^{(m)}, \qquad \hat{\bar{g}}_{2} = \frac{1}{M}\sum_{m=1}^{M}g_{2}^{(m)}
+\end{align*}
+and the variance estimates given by
+\begin{align*}
+    \hat{\sigma}_{1}^{2} = \frac{1}{M}\sum_{m=1}^{M}(g_{1}^{(m)} - \hat{\bar{g}}_{1})^{2}
+\end{align*}
+\begin{align*}
+    \hat{\sigma}_{2}^{2} &= \frac{1}{M}\sum_{t=-\infty}^{\infty} w(t) \hat{\gamma}(t) \\
+    \hat{\gamma}(t) &= \hat{\gamma}(-t) = \frac{1}{M}\sum_{i=1}^{M-t}(g_{2}^{i} - \hat{\bar{g}}_{2})(g_{2}^{i+t} - \hat{\bar{g}}_{2})
+\end{align*}
+where $w$ is a weight function (lag window). since the successive-conditional samples are dependent. The choice of $w$ is somewhat arbitrary. Geweke (1999) chooses
+\begin{align*}
+    w(t) &= \max{\left(\frac{L-t}{L}, 0\right)}, \quad L > 0 \\
+    L &\in \{0.04, 0.08, 0.15\} \times M
+\end{align*}
+
+For a significance level $\alpha$, the testing procedure is
+\begin{itemize}
+    \item Draw $\mathbf{g}_{1}, \mathbf{g}_{2}$
+    \item Calculate $z=\frac{\hat{\bar{g}}_{1} - \hat{\bar{g}}_{2}}{\sqrt{ \frac{\hat{\sigma}^{2}_{1}}{M_{1}} + \frac{\hat{\sigma}^{2}_{2}}{M_{2}}}}$
+    \item If $|z| \geq \Phi^{-1}(1-\alpha/2)$, reject the null hypothesis that the distributions are the same
+\end{itemize}
+
+When the number of test functions grows large, we expect some of the joint distribution tests to fail by chance. To compensate for this, we might introduce a Bonferroni correction and scale down the significance levels. However, this may be too conservative (reduce test power too much), especially if the test statistics are positively correlated. 
+
+A less principled but more intuitive approach is to examine the PP plot of the empirical marginal-conditional and successive-conditional distributions. If the points are close to the unit line, then we fail to reject the null.
+
+\section{MMD}
+
+\subsection{Wild bootstrap}
+This approach is most similar to the Geweke test.
+
+Given $n_{x}$ $\tau$-dependent samples from $p(X)$ and $n_{y}$ $\tau$-dependent samples from $p(Y)$, the biased empirical MMD is
+\begin{equation}
+\begin{array}{c}
+\widehat{\mathrm{MMD}}^{2}_{k}=\frac{1}{n_{x}^{2}} \sum_{i=1}^{n_{x}} \sum_{j=1}^{n_{z}} k\left(x_{i}, x_{j}\right)+\frac{1}{n_{y}^{2}} \sum_{i=1}^{n_{y}} \sum_{j=1}^{n_{y}} k\left(y_{i}, y_{j}\right) \\
+\quad-\frac{2}{n_{x} n_{y}} \sum_{i=1}^{n_{s}} \sum_{j=1}^{n_{y}} k\left(x_{i}, y_{j}\right)
+\end{array}
+\end{equation}
+
+Define the wild bootstrap process $\{W_{t,n}\}_{1\leq t\leq n}$ as
+\begin{equation}
+W_{t, \mathrm{n}}=e^{-1 / t_{n}} W_{t-1, n}+\sqrt{1-e^{-2 / l_{n}}} \epsilon_{t}
+\end{equation}
+with $W_{0,m}, \epsilon_{t} \sim \mathcal{N}(0,1)$, satisfying the bootstrap assumption from Chwialkowski et al. (2016).
+
+Then bootstrapped MMD is
+\begin{equation}
+\begin{array}{c}
+\widehat{\mathrm{MMD}}^{2}_{k, b}=\frac{1}{n_{x}^{2}} \sum_{i=1}^{n_{x}} \sum_{j=1}^{n_{z}} \tilde{W}_{i}^{(x)} \tilde{W}_{j}^{(x)} k\left(x_{i}, x_{j}\right)+\frac{1}{n_{y}^{2}} \sum_{i=1}^{n_{y}} \sum_{j=1}^{n_{y}} \tilde{W}_{i}^{(y)} \tilde{W}_{j}^{(y)} k\left(y_{i}, y_{j}\right) \\
+\quad-\frac{2}{n_{x} n_{y}} \sum_{i=1}^{n_{s}} \sum_{j=1}^{n_{y}} \tilde{W}_{i}^{(x)} \tilde{W}_{j}^{(y)} k\left(x_{i}, y_{j}\right)
+\end{array}
+\end{equation}
+with $\tilde{W}_{t}^{(x)}=W_{t}^{(x)}-\frac{1}{n_{z}} \sum_{i=1}^{n_{x}} W_{i}^{(x)}, \tilde{W}_{t}^{(y)}=W_{t}^{(y)}-\frac{1}{n_{y}} \sum_{j=1}^{n_{y}} W_{j}^{(y)}$, though we don't have to center the wild bootstrap process.
+
+Under the null hypothesis $p(X) = p(Y)$
+\begin{equation*}
+    \varphi\left(\rho_{x} \rho_{y} n \widehat{MMD}^{2}_{k}, \rho_{x} \rho_{y} n \widehat{MMD}^{2}_{k, b}\right) \xrightarrow[]{p} 0, \quad n\rightarrow \infty
+\end{equation*}
+where $\rho_{x} = \frac{n_{x}}{n_{x} + n_{y}}$, $\rho_{y} = \frac{n_{y}}{n_{x} + n_{y}}$.
+
+For a significance level $\alpha$ and $B$ bootstrap samples, the testing procedure is
+\begin{itemize}
+    \item Draw $\{\mathbf{y}_{1}^{(n)}, \mathbf{\theta}_{1}^{(n)}\}_{n=1}^{n_{1}}, \{\mathbf{y}_{2}^{(n)}, \mathbf{\theta}_{2}^{(n)}\}_{n=1}^{n_{2}}$
+    \item Simulate $\{\rho_{1} \rho_{2} n \widehat{\mathrm{MMD}}^{2}_{k, b}\}_{b=1}^{B}$
+    \item Calculate $c_{\alpha}$, the $1-\alpha$ empirical quantile of $\{\rho_{1} \rho_{2} n \widehat{\mathrm{MMD}}^{2}_{k, b}\}_{b=1}^{B}$
+    \item If $\rho_{1} \rho_{2} n \widehat{MMD}^{2}_{k} \geq c_{\alpha} $, reject the null hypothesis that the distributions are the same
+\end{itemize}
+
+\subsection{Backward burn-in}
+A major disadvantage of the successive-conditional sampler is that it cannot be parallelized, i.e., we must draw one sample at a time. Instead, we could draw from the marginal distribution of $\mathbf{y}$ and burn in the posterior simulator to get $\mathbf{\theta}$. 
+
+\begin{algorithm}[H]
+    \centering
+    \caption{backward-conditional}\label{alg:bc-sampler}
+    \begin{algorithmic}[1]
+        \State \text{Initialize} $\mathbf{g}_{3} \in \mathbb{R}_{M\times 1}$
+        \For{$m = 1, \ldots, M$}
+            \State $\mathbf{\theta}_{0} \sim p(\mathbf{\theta})$ 
+            \State $\mathbf{y}_{m} \sim p(\mathbf{y}|\mathbf{\theta}_{0})$ 
+            \For{$n = 1, \ldots, N$}    
+                \State $\mathbf{\theta}_{n} \sim q(\mathbf{\theta}|\mathbf{\theta}_{n-1}, \mathbf{y}_{m})$ 
+            \EndFor
+            \State $\mathbf{g}_{3}[m] = g(\mathbf{\theta}_{n}, \mathbf{y}_{m})$ 
+        \EndFor        
+        \State \textbf{return} $\mathbf{g}_{3}$
+    \end{algorithmic}
+\end{algorithm}
+
+Since the samples are indpendent, we can then apply the Geweke test without the spectral variance estimator, or apply a test based on the unbiased MMD
+\begin{equation}
+\widehat{\mathrm{MMD}}_{\mathrm{U}}^{2}(X, Y) = \frac{1}{{m\choose 2}} \sum_{i \neq i'} k\left(X_{i}, X_{i'}\right)+\frac{1}{{m\choose 2}} \sum_{j \neq j'} k\left(Y_{j}, Y_{j'}\right)-\frac{2}{{m\choose 2}} \sum_{i \neq j} k\left(X_{i}, Y_{j}\right)
+\end{equation}
+
+For a significance level $\alpha$ and $B$ bootstrap samples, the testing procedure is
+\begin{itemize}
+    \item Draw $\{\mathbf{y}_{1}^{(m)}, \mathbf{\theta}_{1}^{(m)}\}_{m=1}^{n}, \{\mathbf{y}_{3}^{(m)}, \mathbf{\theta}_{3}^{(m)}\}_{m=1}^{n}$
+    \item Simulate the null distribution of $n\widehat{\mathrm{MMD}}_{\mathrm{U}}^{2}$ via permutation and calculate the $1-\alpha$ empirical quantile $c_{\alpha}$
+    \item If $n\widehat{\mathrm{MMD}}_{\mathrm{U}}^{2}(\{\mathbf{y}_{1}^{(m)}, \mathbf{\theta}_{1}^{(m)}\}_{m=1}^{n}, \{\mathbf{y}_{3}^{(m)}, \mathbf{\theta}_{3}^{(m)}\}_{m=1}^{n}) \geq c_{\alpha}$, reject the null hypothesis that the distributions are the same
+\end{itemize}
+
+\section{Experiments}
+See BayesLassoDemo.ipynb
+
+\section{Notes TODO}
+\begin{itemize}
+    \item Unify notation
+    \begin{itemize}
+        \item MMD tests on g rather than $\{y, \theta\}$?
+    \end{itemize}
+    \item Experiments
+\end{itemize}
+
+\end{document}
