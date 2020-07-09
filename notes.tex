@@ -90,19 +90,31 @@ with the mean estimates given by
 \begin{align*}
     \hat{\bar{g}}_{1} = \frac{1}{M}\sum_{m=1}^{M}g_{1}^{(m)}, \qquad \hat{\bar{g}}_{2} = \frac{1}{M}\sum_{m=1}^{M}g_{2}^{(m)}
 \end{align*}
-and the variance estimates given by
+The variance estimate for the marginal-conditional samples is straightforward
 \begin{align*}
     \hat{\sigma}_{1}^{2} = \frac{1}{M}\sum_{m=1}^{M}(g_{1}^{(m)} - \hat{\bar{g}}_{1})^{2}
 \end{align*}
+However, the successive-conditional variance estimate is not so simple, since the samples are dependent. One choice is the window estimator
 \begin{align*}
     \hat{\sigma}_{2}^{2} &= \frac{1}{M}\sum_{t=-\infty}^{\infty} w(t) \hat{\gamma}(t) \\
     \hat{\gamma}(t) &= \hat{\gamma}(-t) = \frac{1}{M}\sum_{i=1}^{M-t}(g_{2}^{i} - \hat{\bar{g}}_{2})(g_{2}^{i+t} - \hat{\bar{g}}_{2})
 \end{align*}
-where $w$ is a weight function (lag window). since the successive-conditional samples are dependent. The choice of $w$ is somewhat arbitrary. Geweke (1999) chooses
+where $w$ is a weight function (lag window). The choice of $w$ is somewhat arbitrary. Geweke (1999) chooses
 \begin{align*}
     w(t) &= \max{\left(\frac{L-t}{L}, 0\right)}, \quad L > 0 \\
     L &\in \{0.04, 0.08, 0.15\} \times M
 \end{align*}
+
+Alternatively one might use a batch mean estimator. We divide the samples into $B$ non-overlapping batches of size $m$. Then, for large $m$, the batch means $\{\bar{g}_{j}\}_{j=1}^{B}$ are approximately independent and
+\begin{align*}
+    \bar{g}_{j} \sim \mathcal{N}(\bar{g}, \frac{\sigma^{2}}{m})
+\end{align*}
+\begin{align*}
+    \hat{\sigma}_{2, BM}^{2} &= \frac{m}{B-1}\sum_{j=1}^{B} (\bar{g}_{j} - \bar{g})^{2}
+\end{align*}
+Performance may be improved using multiple chains. However, the choice of batch size $B$ may be challenging --- we need to choose B large enough for the batch means to be approximately independent, but not so large that the confidence interval of the estimator explodes.
+
+Still another alternative is initial sequence estimators (Geyer 1992).
 
 For a significance level $\alpha$, the testing procedure is
 \begin{itemize}
@@ -115,9 +127,9 @@ When the number of test functions grows large, we expect some of the joint distr
 
 A less principled but more intuitive approach is to examine the PP plot of the empirical marginal-conditional and successive-conditional distributions. If the points are close to the unit line, then we fail to reject the null.
 
-\section{MMD}
+\subsection{MMD}
 
-\subsection{Wild bootstrap}
+\subsubsection{Wild bootstrap}
 This approach is most similar to the Geweke test.
 
 Given $n_{x}$ $\tau$-dependent samples from $p(X)$ and $n_{y}$ $\tau$-dependent samples from $p(Y)$, the biased empirical MMD is
@@ -157,7 +169,7 @@ For a significance level $\alpha$ and $B$ bootstrap samples, the testing procedu
     \item If $\rho_{1} \rho_{2} n \widehat{MMD}^{2}_{k} \geq c_{\alpha} $, reject the null hypothesis that the distributions are the same
 \end{itemize}
 
-\subsection{Backward burn-in}
+\subsubsection{Backward burn-in}
 A major disadvantage of the successive-conditional sampler is that it cannot be parallelized, i.e., we must draw one sample at a time. Instead, we could draw from the marginal distribution of $\mathbf{y}$ and burn in the posterior simulator to get $\mathbf{\theta}$. 
 
 \begin{algorithm}[H]
@@ -177,7 +189,7 @@ A major disadvantage of the successive-conditional sampler is that it cannot be 
     \end{algorithmic}
 \end{algorithm}
 
-Since the samples are indpendent, we can then apply the Geweke test without the spectral variance estimator, or apply a test based on the unbiased MMD
+Since the samples are independent, we can then apply the Geweke test without the spectral variance estimator, or apply a test based on the unbiased MMD
 \begin{equation}
 \widehat{\mathrm{MMD}}_{\mathrm{U}}^{2}(X, Y) = \frac{1}{{m\choose 2}} \sum_{i \neq i'} k\left(X_{i}, X_{i'}\right)+\frac{1}{{m\choose 2}} \sum_{j \neq j'} k\left(Y_{j}, Y_{j'}\right)-\frac{2}{{m\choose 2}} \sum_{i \neq j} k\left(X_{i}, Y_{j}\right)
 \end{equation}
@@ -190,7 +202,7 @@ For a significance level $\alpha$ and $B$ bootstrap samples, the testing procedu
 \end{itemize}
 
 \section{Experiments}
-See BayesLassoDemo.ipynb
+See BayesianLassoDemo.ipynb
 
 \section{Notes TODO}
 \begin{itemize}
