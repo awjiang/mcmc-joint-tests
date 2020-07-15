@@ -101,7 +101,7 @@ However, the successive-conditional variance estimate is not so simple, since th
 \end{align*}
 where $w$ is a weight function (lag window). The choice of $w$ is somewhat arbitrary. Geweke (1999) chooses
 \begin{align*}
-    w(t) &= \max{\left(\frac{L-t}{L}, 0\right)}, \quad L > 0 \\
+    w(t) &= \max{\left(\frac{L-|t|}{L}, 0\right)}, \quad L > 0 \\
     L &\in \{0.04, 0.08, 0.15\} \times M
 \end{align*}
 

@@ -3,15 +3,16 @@ import numpy as onp
 import shogun as sg
 from matplotlib import pyplot as plt
 from scipy.stats import norm
+import os
 import pickle
 from time import perf_counter
 
 ''' 
-Split `num_iter` iterations into `nthreads` chunks for multithreading
+Split `num_iter` iterations into `nproc` chunks for multithreading
 '''
-def splitIter(num_iter, nthreads):
-    arr_iter = (onp.zeros(nthreads) + num_iter // nthreads).astype('int')
-    for i in range(num_iter % nthreads):
+def splitIter(num_iter, nproc):
+    arr_iter = (onp.zeros(nproc) + num_iter // nproc).astype('int')
+    for i in range(num_iter % nproc):
         arr_iter[i] += 1
     return arr_iter
 
@@ -33,22 +34,24 @@ def rbf_kernel(X, Y, tau):
 '''
 Calculate the squared standard error of the estimate of E[`g`] (Geweke 1999, 3.7-8).
 '''
-def geweke_se2(g, L=None, center=True):
+def geweke_se2(g, L=0, center=True):
+    L = int(L)
     M = g.shape[0]
     if center==True:
         g -= g.mean(axis=0)
     v = geweke_c(g=g, s=0)
     v_L = 0.
-    if L is not None:
-        L = int(L)
+    if L != 0:
+        w = (L-onp.arange(0, L))/L  # weights
+        v *= w[0]
         assert L > 0 and L < M
         for s in range(1, L):
-            v_L += (L-s)/L * geweke_c(g=g, s=s)
+            v_L += w[s] * geweke_c(g=g, s=s)
     v = (v + 2*v_L)/M
     return v
 
 '''
-Calculate the biased `s`-lag autocovariance of *centered* test functions `g`
+Calculate the biased `s`-lag autocovariance of *centered* samples `g`
 '''
 def geweke_c(g, s):
     if s==0:
@@ -75,10 +78,7 @@ def geweke_test(g_mc, g_sc, alpha, l=0.15, use_bonferroni=False):
 
     M_sc = float(g_sc.shape[0])
     mean_sc = g_sc.mean(axis=0)
-    if l == 0:
-        L_sc = None
-    else:
-        L_sc = l*M_sc
+    L_sc = l*M_sc
     se2_sc = geweke_se2(g_sc, L=L_sc)
     
     if use_bonferroni==True:
@@ -123,7 +123,6 @@ def prob_plot(x, y, plot_type='PP', step = 0.005):
         pp_y = [ecdf(z, y) for z in onp.arange(z_min, z_max, step * (z_max-z_min))]
         plt.plot(pp_x, pp_y, marker='o', color='black', fillstyle='none', linestyle='none')
         plt.plot(pp_x, pp_x, color='black')
-        # plt.title('PP Plot')
     elif plot_type == 'QQ':
         q = onp.arange(0., 1.+step, step)
         qq_x = onp.quantile(x, q)
@@ -146,11 +145,17 @@ def mmd_test(samples_p, samples_q, lst_kernels, alpha=0.05, train_test_ratio=1, 
         samples_p = samples_p.reshape(samples_p.shape[0], 1)
     if len(samples_q.shape) == 1:
         samples_q = samples_q.reshape(samples_q.shape[0], 1)
+    
+    assert samples_p.shape[1] == samples_q.shape[1]
 
     features_p = sg.RealFeatures(samples_p.T)
     features_q = sg.RealFeatures(samples_q.T)
 
-    mmd = sg.QuadraticTimeMMD(features_p, features_q)
+    if samples_p.shape[0] == samples_q.shape[0]:
+        mmd = sg.LinearTimeMMD(features_p, features_q)
+    else:
+        mmd = sg.QuadraticTimeMMD(features_p, features_q)
+
     mmd.set_statistic_type(sg.ST_UNBIASED_FULL) # V-statistic = ST_BIASED_FULL
     
     # if multiple kernels are provided, will learn which maximizes test power and compute the result on a held-out test set
@@ -259,94 +264,152 @@ def mmd_wb_test(X, Y, f_kernel, alpha, null_samples=100, rng=None):
 Generic class to run multiple trials of an experiment in parallel
 '''
 class experiment(object):
-    def __init__(self, num_trials, nthreads, seed=None):
+    def __init__(self, num_trials, nproc, seed=None):
         self._num_trials = num_trials
-        self._nthreads = nthreads
+        self._nproc = nproc
         if seed is None:
             self._seed_sequence = onp.random.SeedSequence()
         else:
             self._seed = seed
             self._seed_sequence = onp.random.SeedSequence(self._seed)
-        self._child_seed_sequences = self._seed_sequence.spawn(self._nthreads)
+        self._child_seed_sequences = self._seed_sequence.spawn(self._nproc)
         pass
 
     def run_trial(self):
         pass
 
-    def run_experiment(self, num_trials, **kwargs):
-        lst_results = [None] * num_trials
+    def save_trial(self, res, trial):
+        pass
+
+    def run_experiment(self, num_trials, seed_sequence):
+        # set the seed of the sampler based on the passed seed sequence
+        seed = seed_sequence.generate_state(1)
+        self._sampler.set_seed(seed)
+
+        lst_paths = [None] * num_trials
         for trial in range(num_trials):
-            lst_results[trial] = self.run_trial()
-        return lst_results
+          res = self.run_trial()
+          lst_paths[trial] = self.save_trial(res, trial)
+          del res
+        return lst_paths
 
     def run(self):
-        print(f'Running {self._num_trials} trials with {self._nthreads} threads')
-        if self._nthreads == 1:
+        print(f'Running {self._num_trials} trials with {self._nproc} processes')
+        if self._nproc == 1:
             out = self.run_experiment(self._num_trials, self._child_seed_sequences[0])
         else:
-            lst_num_trials = splitIter(int(self._num_trials), int(self._nthreads))
-            pool = multiprocessing.Pool(processes=int(self._nthreads))
-            out = pool.starmap(self.run_experiment, zip(lst_num_trials, self._child_seed_sequences, onp.arange(len(lst_num_trials))))
+            lst_num_trials = splitIter(int(self._num_trials), int(self._nproc))
+            pool = multiprocessing.Pool(processes=int(self._nproc))
+            out = pool.starmap(self.run_experiment, zip(lst_num_trials, self._child_seed_sequences))
             pool.close()
         return out
 
 '''
-Sampling experiment class for comparing various marginal samples of theta using Geweke, MMD-backward, and wild-MMD-Geweke tests
+Experiment class for comparing various marginal samples of theta using Geweke, MMD-backward, and wild-MMD-Geweke joint tests
 '''
-class sample_experiment(experiment):
-    def __init__(self, num_trials, nthreads, seed=None, **kwargs):
-        super().__init__(num_trials, nthreads, seed)
+class joint_test_experiment(experiment):
+    def __init__(self, num_trials, nproc, seed=None, **kwargs):
+        super().__init__(num_trials, nproc, seed)
         for key, value in kwargs.items():
             setattr(self, '_' + key, value)
-        for attr in ['_sampler', '_num_trials', '_nthreads', '_num_samples', '_burn_in_samples', '_geweke_thinning_samples', '_mmd_thinning_samples', '_tau', '_alpha', '_savedir']:
+        for attr in ['_experiment_name', '_sampler', '_num_trials', '_nproc', '_num_samples', '_burn_in_samples_bc', '_geweke_thinning_samples', '_mmd_thinning_samples', '_tau', '_alpha', '_l_geweke']:
             assert hasattr(self, attr)
+
+        self._dir_tests = './results/' + \
+            type(self._sampler).__name__.replace('_sampler', '') + '/'
+        self._dir_samples = './samples/' + \
+            type(self._sampler).__name__.replace('_sampler', '') + '/'
+        if not os.path.isdir(self._dir_tests):
+            os.makedirs(self._dir_tests)
+        if not os.path.isdir(self._dir_samples):
+            os.makedirs(self._dir_samples)
         pass
 
-    def run_experiment(self, num_trials, seed_sequence, experiment_id):
-        seed = seed_sequence.generate_state(1)
-        self._sampler.set_seed(seed) # set the seed of the sampler based on the passed seed sequence
-
-        # lst_results = super().run_experiment(num_trials)
+    def save_trial(self, res, trial):
+        file_name = '/experiment_' + str(self._experiment_name) + '_' + \
+            str(os.getpid()) + '_' + str(trial) + '.pkl'
         
-        lst_paths = []
-        for trial in range(num_trials):
-          lst_results = super().run_experiment(1)
-          path = self._savedir + '/' + str(self._experiment_name) +'_results_' + str(experiment_id) + '_' + str(trial) + '.pkl'
-          with open(path, 'wb') as f:
-            pickle.dump(lst_results, f)
-          del lst_results
-          lst_paths += path
+        lst_paths = [None] * 2
+        for i, d in enumerate([self._dir_tests, self._dir_samples]):
+            path = d+file_name
+            with open(path, 'wb') as f:
+                pickle.dump(res[i], f)
+            lst_paths[i] = path
+
         return lst_paths
 
     def run_trial(self):
         theta_indices = self._sampler.theta_indices
-        thinned_samples_geweke = onp.arange(0, self._num_samples, self._geweke_thinning_samples).astype('int') # thinning for Geweke test
-        thinned_samples_mmd = onp.arange(0, self._num_samples, self._mmd_thinning_samples).astype('int') # thinning for MMD tests
+        thinned_samples_geweke = onp.arange(
+            0, self._num_samples, self._geweke_thinning_samples).astype('int')  # thinning for Geweke test
+        thinned_samples_mmd = onp.arange(0, self._num_samples, self._mmd_thinning_samples).astype(
+            'int')  # thinning for MMD tests
 
         samples_p = self._sampler.sample_mc(self._num_samples)
         samples_q = self._sampler.sample_bc(
-            int(self._num_samples / self._mmd_thinning_samples), burn_in_samples=self._burn_in_samples)
+            int(self._num_samples / self._mmd_thinning_samples), burn_in_samples=self._burn_in_samples_bc)
         samples_r = self._sampler.sample_sc(self._num_samples)
-        
+
         # Geweke test
         time_start_geweke = perf_counter()
         tests_geweke = geweke_test(geweke_functions(samples_p[thinned_samples_geweke, :][:, theta_indices]), geweke_functions(
-            samples_r[thinned_samples_geweke, :][:, theta_indices]), l=0.15, alpha=self._alpha)
+            samples_r[thinned_samples_geweke, :][:, theta_indices]), l=self._l_geweke, alpha=self._alpha)
         time_end_geweke = perf_counter()
-        
+
         # backward MMD test
         time_start_backward = perf_counter()
-        tests_backward = mmd_test(samples_p[thinned_samples_mmd, :][:,theta_indices],samples_q[:, theta_indices], sg.GaussianKernel(10, self._tau), alpha=self._alpha)
+        tests_backward = mmd_test(samples_p[thinned_samples_mmd, :][:, theta_indices],
+                                  samples_q[:, theta_indices], sg.GaussianKernel(10, self._tau), alpha=self._alpha)
         time_end_backward = perf_counter()
-        
+
         # wild MMD-SC test
         time_start_wild = perf_counter()
-        f_kernel = lambda X, Y: rbf_kernel(X, Y, tau=self._tau)
-        tests_wild = mmd_wb_test(samples_p[thinned_samples_mmd, :][:, theta_indices], samples_r[thinned_samples_mmd, :][:, theta_indices], f_kernel, alpha=self._alpha)
+        def f_kernel(X, Y): return rbf_kernel(X, Y, tau=self._tau)
+        tests_wild = mmd_wb_test(samples_p[thinned_samples_mmd, :][:, theta_indices],
+                                 samples_r[thinned_samples_mmd, :][:, theta_indices], f_kernel, alpha=self._alpha)
         time_end_wild = perf_counter()
-        
-        test_runtimes = {'geweke':time_end_geweke-time_start_geweke, 'backward':time_end_backward-time_start_backward, 'wild':time_end_wild-time_start_wild}
-        
-        tests = {'geweke': tests_geweke, 'backward': tests_backward, 'wild': tests_wild, 'specification': self.__dict__, 'test_runtimes':test_runtimes}
+
+        test_runtimes = {'geweke': time_end_geweke-time_start_geweke,
+                         'backward': time_end_backward-time_start_backward, 'wild': time_end_wild-time_start_wild}
+
+        tests = {'geweke': tests_geweke, 'backward': tests_backward, 'wild': tests_wild,
+                 'specification': self.__dict__, 'test_runtimes': test_runtimes}
         samples = {'mc': samples_p, 'bc': samples_q, 'sc': samples_r}
         return tests, samples
+
+
+'''
+Generate samples in parallel
+'''
+class parallel_sampler(experiment):
+    def __init__(self, num_trials, nproc, seed=None, **kwargs):
+        super().__init__(num_trials, nproc, seed)
+        for key, value in kwargs.items():
+            setattr(self, '_' + key, value)
+        for attr in ['_experiment_name', '_sampler', '_num_trials', '_nproc', '_num_samples_mc', '_num_samples_sc', '_num_samples_bc', '_burn_in_samples_bc']:
+            assert hasattr(self, attr)
+        
+        self._sampler.set_nproc(1)
+
+        self._dir_samples = './samples/' + \
+            type(self._sampler).__name__.replace('_sampler', '') + '/'
+        if not os.path.isdir(self._dir_samples):
+            os.makedirs(self._dir_samples)
+        pass
+
+    def save_trial(self, res, trial):
+        file_name = '/experiment_' + str(self._experiment_name) + '_' + \
+            str(os.getpid()) + '_' + str(trial) + '.pkl'
+        path = self._dir_samples  + file_name
+        with open(path, 'wb') as f:
+            pickle.dump(res, f)
+        return path
+
+    def run_trial(self):
+        theta_indices = self._sampler.theta_indices
+        samples_p = self._sampler.sample_mc(self._num_samples_mc)
+        samples_q = self._sampler.sample_bc(self._num_samples_bc, self._burn_in_samples_bc)
+        samples_r = self._sampler.sample_sc(self._num_samples_sc)
+
+        samples = {'mc': samples_p, 'bc': samples_q, 'sc': samples_r}
+        return samples

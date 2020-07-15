@@ -3,6 +3,7 @@ import jax.numpy as np
 from scipy.stats import invwishart, laplace, norm, reciprocal, t
 from scipy.special import comb, loggamma, multigammaln
 import multiprocessing
+from functools import reduce
 from itertools import repeat
 
 #######################################################################
@@ -127,11 +128,11 @@ def GaussianProductMV(mu_0, Sigma_0, lst_mu, lst_Sigma):
     return mu_pr, Sigma_pr
 
 ''' 
-Split `num_iter` iterations into `nthreads` chunks for multithreading
+Split `num_iter` iterations into `nproc` chunks for multithreading
 '''
-def splitIter(num_iter, nthreads):
-    arr_iter = (onp.zeros(nthreads) + num_iter // nthreads).astype('int')
-    for i in range(num_iter % nthreads):
+def splitIter(num_iter, nproc):
+    arr_iter = (onp.zeros(nproc) + num_iter // nproc).astype('int')
+    for i in range(num_iter % nproc):
         arr_iter[i] += 1
     return arr_iter
 
@@ -301,14 +302,14 @@ Generic sampler class
 '''
 class model_sampler(object):
     def __init__(self, **kwargs):
-        self._nthreads = 1
+        self._nproc = 1
         for key, value in kwargs.items():
             setattr(self, '_' + key, value)
         if hasattr(self, '_seed'):
             self._seed_sequence = onp.random.SeedSequence(self._seed)
         else:
             self._seed_sequence = onp.random.SeedSequence()
-        self.set_nthreads(self._nthreads)
+        self.set_nproc(self._nproc)
         pass
         
     @property
@@ -324,13 +325,11 @@ class model_sampler(object):
     def drawPosterior(self):
         pass
     
-    ## Forward and backward sampling
+    ## Forward, backward, successive sampling
     def forward(self, num_samples, rng):
         samples = onp.empty([num_samples, self.sample_dim])
         for i in range(num_samples):
-            # draw from prior
             sample_prior = self.drawPrior(rng)
-            # draw from conditional
             sample_likelihood = self.drawLikelihood(rng)
             samples[i, :] = onp.hstack([sample_likelihood, sample_prior])
         return samples
@@ -338,14 +337,31 @@ class model_sampler(object):
     def backward(self, num_samples, burn_in_samples, rng):
         samples = onp.empty([num_samples, self.sample_dim])
         for i in range(int(num_samples)):
-            # initialize
             self.drawPrior(rng)
             sample_likelihood = self.drawLikelihood(rng)
-            # draw from proposal distribution
             for _ in range(int(burn_in_samples+1)):           
                 sample_posterior = self.drawPosterior(rng)
             samples[i, :] = onp.hstack([sample_likelihood, sample_posterior])
         return samples
+
+    def successive(self, num_samples, rng):
+        samples = onp.empty([int(num_samples), self.sample_dim])
+        self.drawPrior(rng)
+        for i in range(int(num_samples)):
+            sample_likelihood = self.drawLikelihood(rng)
+            sample_posterior = self.drawPosterior(rng)
+            samples[i, :] = onp.hstack([sample_likelihood, sample_posterior])
+        return samples
+
+    # Generate `num_chains` chains of `num_samples` successive samples
+    def chains_successive(self, num_samples, num_chains, rng):
+        if num_chains == 1:
+            return self.successive(num_samples, rng)
+        elif num_chains > 1:
+            lst_out = [None] * num_chains
+            for i in range(num_chains):
+                lst_out[i] = self.successive(num_samples, rng)
+            return lst_out
 
     ## Functions for random number generation and multithreading
     def set_seed(self, seed=None):
@@ -356,13 +372,13 @@ class model_sampler(object):
         self.init_rng()
         pass
 
-    def set_nthreads(self, nthreads):
-        self._nthreads = nthreads
+    def set_nproc(self, nproc):
+        self._nproc = nproc
         self.init_rng()
         pass
     
     def init_rng(self):
-        child_seed_seq = self._seed_sequence.spawn(self._nthreads + 1)
+        child_seed_seq = self._seed_sequence.spawn(self._nproc + 1)
         # multi-threaded
         child_seed_seq_m = child_seed_seq[:-1]
         self._bitgen_m = [onp.random.MT19937(s) for s in child_seed_seq_m]
@@ -386,11 +402,11 @@ class model_sampler(object):
     
     # Marginal-conditional sampler
     def sample_mc(self, num_samples):
-        if self._nthreads == 1:
+        if self._nproc == 1:
             samples = self.forward(int(num_samples), self._rng_s)
         else:
-            lst_num_samples = splitIter(int(num_samples), self._nthreads)
-            pool = multiprocessing.Pool(processes=self._nthreads)
+            lst_num_samples = splitIter(int(num_samples), self._nproc)
+            pool = multiprocessing.Pool(processes=self._nproc)
             out = pool.starmap(self.forward, zip(lst_num_samples, self._rng_m))
             pool.close()
             samples = onp.vstack(out)
@@ -398,31 +414,45 @@ class model_sampler(object):
         return samples
 
     # Successive-conditional sampler
-    def sample_sc(self, num_samples):
-        samples = onp.empty([int(num_samples), self.sample_dim])
-        # initialize
-        self.drawPrior(self._rng_s)
-        # draw from proposal distribution
-        for i in range(int(num_samples)):
-            sample_likelihood = self.drawLikelihood(self._rng_s)  
-            sample_posterior = self.drawPosterior(self._rng_s) 
-            samples[i, :] = onp.hstack([sample_likelihood, sample_posterior])
-        self.jump_rng('s')
+    def sample_sc(self, num_samples, num_chains=1):
+        if num_chains == 1:
+            samples = self.successive(int(num_samples), self._rng_s)
+        elif num_chains > 1:
+            lst_chains = splitIter(int(num_chains), self._nproc)
+            pool = multiprocessing.Pool(processes=self._nproc)
+            out = pool.starmap(self.chains_successive, zip(repeat(num_samples), lst_chains, self._rng_m))
+            pool.close()
+            samples = reduce(lambda x, y: x + y, out)
+            self.jump_rng('m')
+        else:
+            raise ValueError
         return samples
 
     # Backward-conditional sampler
     def sample_bc(self, num_samples, burn_in_samples):
-        if self._nthreads == 1:
+        if self._nproc == 1:
             samples = self.backward(int(num_samples), int(burn_in_samples), self._rng_s)
         else:    
-            lst_num_samples = splitIter(int(num_samples), self._nthreads)
-            pool = multiprocessing.Pool(processes=self._nthreads)
+            lst_num_samples = splitIter(int(num_samples), self._nproc)
+            pool = multiprocessing.Pool(processes=self._nproc)
             out = pool.starmap(self.backward, zip(lst_num_samples, repeat(burn_in_samples), self._rng_m))
             pool.close()
             samples = onp.vstack(out)
             self.jump_rng('m')
         return samples
-    
+
+
+''' 
+Mixture of d-dimensional t-distributions
+Parameters:
+    D: dimension of each t-distribution
+    v: degrees of freedom of each t-distribution
+    M: mixture number
+    N: observation number
+    m_mu, S_mu: hyperparameters (mean and variance) for Gaussian prior on mu. Must be provided as lists
+    v_Sigma, Psi_Sigma: hyperparameters for Inverse Wishart prior on Sigma. When D=1, reduces to Inverse Gamma with alpha=v/2 and beta=Psi/2
+    alpha_p: hyperparameters for Dirichlet prior on p.
+'''
 class t_mixture_sampler(model_sampler):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -941,8 +971,6 @@ class gaussian_mixture_sampler(model_sampler):
 RJ Bayesian Lasso
 Model based on (Chen, Wang, and McKeown 2011), with approximate sampling method from (Korattikara, Chen, and Welling 2014)
 '''
-
-
 class bayes_lasso_sampler(model_sampler):
     def __init__(self, **kwargs):
       self._mode = 'exact'
@@ -978,8 +1006,7 @@ class bayes_lasso_sampler(model_sampler):
         gamma = self._gamma
       if k is None:
         k = self._k
-      # - k*onp.log(self._tau) - onp.abs(beta[gamma,:]).sum()/self._tau
-      return - onp.log(comb(self._p, k)) - self._Lambda + k*onp.log(self._Lambda) - loggamma(k+1) + laplace.logpdf(x=beta[gamma, :], scale=self._tau).sum()
+      return - loggamma(self._p+1) + loggamma(k+1) + loggamma(self._p-k+1) - self._Lambda + k*onp.log(self._Lambda) - loggamma(k+1) + laplace.logpdf(x=beta[gamma, :], scale=self._tau).sum()
 
     def log_likelihood(self, beta=None, subset=None, return_components=False):
       if beta is None:
@@ -1008,9 +1035,9 @@ class bayes_lasso_sampler(model_sampler):
           rng = self._rng_s
 
       self._X = rng.normal(size=[self._n, self._p])
-      self._p_k = onp.exp(onp.arange(1, self._p+1) * onp.log(self._Lambda) -
+      self._pmf_k = onp.exp(onp.arange(1, self._p+1) * onp.log(self._Lambda) -
                           self._Lambda - loggamma(1+onp.arange(1, self._p+1)))
-      self._p_k = self._p_k/self._p_k.sum()
+      self._pmf_k = self._pmf_k/self._pmf_k.sum()
       pass
 
     def drawPrior(self, rng=None):
@@ -1018,7 +1045,7 @@ class bayes_lasso_sampler(model_sampler):
           rng = self._rng_s
 
       self._beta = onp.zeros(shape=[self._p, 1])
-      self._k = rng.choice(a=onp.arange(1, self._p+1), p=self._p_k)
+      self._k = rng.choice(a=onp.arange(1, self._p+1), p=self._pmf_k)
 
       self._gamma = rng.choice(self._p, size=self._k, replace=False)
       self._beta[self._gamma, :] = rng.laplace(
@@ -1169,3 +1196,35 @@ class bayes_lasso_sampler(model_sampler):
           done = True
       pass
 
+
+'''
+Error 1: forget to include the transition probabilities when calculating the acceptance probabilities for the 'birth' and 'death' moves
+'''
+class bayes_lasso_sampler_error_1(bayes_lasso_sampler):
+    def updateMH(self, j, k_proposal, gamma_proposal, beta_proposal, rng):
+      diff_log_joint = self.log_joint(
+          beta=beta_proposal, gamma=gamma_proposal, k=k_proposal) - self.log_joint()
+      threshold = diff_log_joint
+
+      log_u = onp.log(rng.uniform())
+      if log_u <= threshold:
+        self._k = k_proposal
+        self._gamma = gamma_proposal
+        self._beta = beta_proposal
+      return log_u, threshold
+
+
+'''
+Error 2: drop a '+1' in the log-prior calculation
+'''
+class bayes_lasso_sampler_error_2(bayes_lasso_sampler):
+    def log_prior(self, beta=None, gamma=None, k=None):
+      if beta is None:
+        beta = self._beta
+      if gamma is None:
+        gamma = self._gamma
+      if k is None:
+        k = self._k
+    #   return - onp.log(comb(self._p, k)) - self._Lambda + k*onp.log(self._Lambda) - loggamma(k+1) + laplace.logpdf(x=beta[gamma, :], scale=self._tau).sum() # correct
+      # error
+      return - onp.log(comb(self._p, k)) - self._Lambda + k*onp.log(self._Lambda) - loggamma(k) + laplace.logpdf(x=beta[gamma, :], scale=self._tau).sum()
