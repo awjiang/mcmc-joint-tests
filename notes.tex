@@ -99,7 +99,7 @@ However, the successive-conditional variance estimate is not so simple, since th
     \hat{\sigma}_{2}^{2} &= \frac{1}{M}\sum_{t=-\infty}^{\infty} w(t) \hat{\gamma}(t) \\
     \hat{\gamma}(t) &= \hat{\gamma}(-t) = \frac{1}{M}\sum_{i=1}^{M-t}(g_{2}^{i} - \hat{\bar{g}}_{2})(g_{2}^{i+t} - \hat{\bar{g}}_{2})
 \end{align*}
-where $w$ is a weight function (lag window). The choice of $w$ is somewhat arbitrary. Geweke (1999) chooses
+where $w$ is a weight function (lag window). Geweke (1999) chooses
 \begin{align*}
     w(t) &= \max{\left(\frac{L-|t|}{L}, 0\right)}, \quad L > 0 \\
     L &\in \{0.04, 0.08, 0.15\} \times M
