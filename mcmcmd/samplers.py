@@ -1,10 +1,11 @@
 import numpy as onp
-import jax.numpy as np
+# import jax.numpy as np
 from scipy.stats import invwishart, laplace, norm, reciprocal, t
 from scipy.special import comb, loggamma, multigammaln
 import multiprocessing
 from functools import reduce
 from itertools import repeat
+import pdb
 
 #######################################################################
 ######################### Helper Functions ############################
@@ -23,6 +24,20 @@ def diagMatrix(z):
     diag_z = onp.eye(len(z))
     onp.fill_diagonal(diag_z,z)
     return(diag_z)
+
+'''
+Returns a matrix with column means corresponding to the first and second empirical moments of `samples`.
+'''
+def geweke_functions(samples):
+    f1 = samples.copy()
+    n, p = f1.shape
+    f2 = onp.empty([n, int(p*(p+1)/2)])
+    counter = 0
+    for i in range(p):
+        for j in range(i+1):
+            f2[:, counter] = f1[:, i] * f1[:, j]
+            counter += 1
+    return onp.hstack([f1, f2])
     
 '''
 If x is a numpy array, return f(x), otherwise return x as a scalar or array
@@ -121,10 +136,6 @@ def GaussianProductMV(mu_0, Sigma_0, lst_mu, lst_Sigma):
             mu_2 = onp.linalg.solve(L, lst_mu[i].reshape(-1, 1))
             mu_pr = Sigma_2.T @ mu_1 + Sigma_1.T @ mu_2
             Sigma_pr = Sigma_1.T @ Sigma_2
-            # # Inefficient alternative
-            # Sigma_sum_inv = onp.linalg.inv(Sigma_pr + lst_Sigma[i])
-            # mu_pr = lst_Sigma[i] @ Sigma_sum_inv @ mu_pr.reshape(-1, 1) + Sigma_pr @ Sigma_sum_inv @ lst_mu[i].reshape(-1, 1)
-            # Sigma_pr = Sigma_pr @ Sigma_sum_inv @ lst_Sigma[i]
     return mu_pr, Sigma_pr
 
 ''' 
@@ -316,6 +327,10 @@ class model_sampler(object):
     def sample_dim(self):
         pass
 
+    @property
+    def theta_indices(self):
+        pass
+
     def drawPrior(self):
         pass
 
@@ -441,303 +456,540 @@ class model_sampler(object):
             self.jump_rng('m')
         return samples
 
+    # 
+    def test_functions(self, samples):
+        return geweke_functions(samples)
+
+
+# ''' 
+# Mixture of d-dimensional t-distributions
+# Parameters:
+#     D: dimension of each t-distribution
+#     v: degrees of freedom of each t-distribution
+#     M: mixture number
+#     N: observation number
+#     m_mu, S_mu: hyperparameters (mean and variance) for Gaussian prior on mu. Must be provided as lists
+#     v_Sigma, Psi_Sigma: hyperparameters for Inverse Wishart prior on Sigma. When D=1, reduces to Inverse Gamma with alpha=v/2 and beta=Psi/2
+#     alpha_p: hyperparameters for Dirichlet prior on p.
+# '''
+# class t_mixture_sampler(model_sampler):
+#     def __init__(self, **kwargs):
+#         super().__init__(**kwargs)
+
+#         # Check inputs
+#         for attr in ['_D', '_M', '_N', '_v', '_m_mu', '_S_mu', '_v_Sigma', '_Psi_Sigma', '_alpha_p']:
+#             assert hasattr(self, attr)
+
+#         self._D = int(self._D)
+#         self._M = int(self._M)
+#         self._N = int(self._N)
+#         self._alpha_p = onp.array(self._alpha_p).flatten()
+
+#         assert len(self._m_mu) == len(self._S_mu)
+#         assert len(self._S_mu) == len(self._v_Sigma)
+#         assert len(self._v_Sigma) == len(self._Psi_Sigma)
+#         assert len(self._Psi_Sigma) == self._M
+
+#         assert onp.vstack(self._m_mu).shape == (self._D*self._M, 1)
+
+#         for k in range(self._M):
+#             assert square_dim(self._S_mu[k]) == self._D
+#             assert square_dim(self._v_Sigma[k]) == 1
+#             assert square_dim(self._Psi_Sigma[k]) == self._D
+
+#         assert self._alpha_p.shape == (self._M,)
+#         pass
+
+#     @property
+#     def sample_dim(self):
+#         # (y) + (Sigma, mu, p) + (s, w)
+#         return self._D*self._N + (self._D ** 2 + self._D + 1)*self._M - 1 + 2*self._N
+
+#     @property
+#     def theta_indices(self):
+#         return onp.arange(self._N * self._D, self._N + (self._D ** 2 + self._D + 1)*self._M - 1)
+
+#     def drawPrior(self, rng=None):
+#         if rng is None:
+#             rng = onp.random.Generator(onp.random.MT19937())
+
+#         # Set random state for invwishart sampling
+#         rng_randState = onp.random.RandomState()
+#         rng_randState.set_state(rng.bit_generator.state)
+
+#         if not hasattr(self, '_p_distr_prior'):
+#             self._mu_distr_prior = [gaussian_distr(
+#                 mean=self._m_mu[k], cov=self._S_mu[k], rng=rng) for k in range(self._M)]
+#             self._Sigma_distr_prior = [invwishart_distr(
+#                 df=self._v_Sigma[k], scale=self._Psi_Sigma[k], rng=rng_randState) for k in range(self._M)]
+#             self._p_distr_prior = dirichlet_distr(alpha=self._alpha_p, rng=rng)
+
+#         self._mu = [self._mu_distr_prior[k].sample()
+#                     for k in range(int(self._M))]
+#         self._Sigma = [self._Sigma_distr_prior[k].sample()
+#                        for k in range(int(self._M))]
+#         self._p = self._p_distr_prior.sample().flatten()
+
+#         # draw latent variable s, auxiliary variable w
+#         s_distr = categorical_distr(pi=self._p.flatten(), rng=rng)
+#         self._s = s_distr.sample(num_samples=self._N).flatten()
+#         if not hasattr(self, '_chisquare_distr'):
+#             self._chisquare_distr = chisquare_distr(df=self._v, rng=rng)
+#         self._w = self._chisquare_distr.sample(num_samples=self._N).flatten()/self._v
+
+#         return onp.hstack([onp.array(self._mu).reshape(1, -1).flatten(), onp.array(self._Sigma).reshape(1, -1).flatten(), self._p[:-1], self._s, self._w])
+
+#     def drawLikelihood(self, rng=None):
+#         if rng is None:
+#             rng = onp.random.Generator(onp.random.MT19937())
+#         if not hasattr(self, '_y'):
+#             self._y = onp.empty([self._N, self._D])
+
+#         y_distr = [t_distr(df=self._v, mean=self._mu[k].flatten(), scale=self._Sigma[k], rng=rng) for k in range(self._M)]
+#         for i in range(self._N):
+#             self._y[i, :] = y_distr[self._s[i]].sample(aux=self._w[i]).flatten()
+
+#         return self._y.reshape(1, -1).flatten()
+
+#     def drawPosterior(self, rng=None):
+#         if rng is None:
+#             rng = onp.random.Generator(onp.random.MT19937())
+
+#         # Set random state for invwishart sampling
+#         rng_randState = onp.random.RandomState()
+#         rng_randState.set_state(rng.bit_generator.state)
+
+#         self.drawPosterior_s(rng)
+#         self.drawPosterior_Sigma(rng_randState)
+#         self.drawPosterior_mu(rng)
+#         self.drawPosterior_p(rng)
+
+#         return onp.hstack([onp.array(self._mu).reshape(1, -1).flatten(), onp.array(self._Sigma).reshape(1, -1).flatten(), self._p[:-1], self._s, self._w])
+
+#     def drawPosterior_s(self, rng):
+#         s_distr_cond = self.getCond_s(rng)
+#         proposal = self._s.copy()
+#         for i in range(self._N):
+#             proposal[i] = s_distr_cond[i].sample()
+#         self._s = proposal
+#         return proposal, s_distr_cond
+
+#     def drawPosterior_w(self, rng):
+#         proposal = self._w.copy()
+#         chisq_coeff = (self._v + onp.array([XTWX((self._y[i, :]-self._mu[self._s[i]]).reshape(
+#             -1, 1), inv(self._Sigma[self._s[i]], return_array=True)) for i in range(self._N)])).flatten()
+#         chisq_distr_cond = self.getCond_chisq(rng)
+#         proposal = chisq_distr_cond.sample(num_samples=self._N).flatten()/chisq_coeff
+#         self._w = proposal
+#         return proposal, chisq_coeff, chisq_distr_cond
+
+#     def drawPosterior_Sigma(self, rng):
+#         Sigma_distr_cond = self.getCond_Sigma(rng)
+#         proposal = self._Sigma.copy()
+#         for k in range(self._M):
+#             proposal[k] = Sigma_distr_cond[k].sample()
+#         self._Sigma = proposal
+#         return proposal, Sigma_distr_cond
+
+#     def drawPosterior_mu(self, rng):
+#         mu_distr_cond = self.getCond_mu(rng)
+#         proposal = self._mu.copy()
+#         for k in range(self._M):
+#             proposal[k] = mu_distr_cond[k].sample()
+#         self._mu = proposal
+#         return proposal, mu_distr_cond
+
+#     def drawPosterior_p(self, rng):
+#         p_distr_cond = self.getCond_p(rng)
+#         proposal = p_distr_cond.sample().flatten()
+#         self._p = proposal
+#         return proposal, p_distr_cond
+
+#     def getCond_mu(self, rng):
+#         mu_distr_cond = [None] * self._M
+#         for k in range(self._M):
+#             s_k = (self._s == k)
+#             num_s_k = s_k.sum()
+#             if num_s_k == 0:
+#                 mu_pr, Sigma_pr = self._m_mu[k], self._S_mu[k]
+#             else:
+#                 lst_mu_k = onp.vsplit(
+#                     self._y[s_k, :].reshape(num_s_k, self._D), num_s_k)
+#                 lst_Sigma_k = self._Sigma[k]/self._w[s_k]
+#                 mu_pr, Sigma_pr = GaussianProductMV(
+#                     mu_0=self._m_mu[k], Sigma_0=self._S_mu[k], lst_mu=lst_mu_k, lst_Sigma=lst_Sigma_k)
+#             mu_distr_cond[k] = gaussian_distr(
+#                 mean=mu_pr, cov=Sigma_pr, rng=rng)
+#         return mu_distr_cond
+
+#     def getCond_Sigma(self, rng):
+#         Sigma_distr_cond = [None] * self._M
+#         for k in range(self._M):
+#             s_k = (self._s == k)
+#             num_s_k = s_k.sum()
+#             Sigma_distr_cond[k] = invwishart_distr(df=self._v_Sigma[k] + num_s_k,
+#                                                    scale=self._Psi_Sigma[k] + XTWX(self._y[s_k, :].reshape(
+#                                                        num_s_k, self._D)-self._mu[k].reshape(1, self._D), diagMatrix(self._w[s_k])),
+#                                                    rng=rng)
+#         return Sigma_distr_cond
+
+#     def getCond_s(self, rng):
+#         y_distr = [t_distr(df=self._v, mean=self._mu[k].flatten(
+#         ), scale=self._Sigma[k], rng=rng) for k in range(self._M)]
+#         s_distr_cond = [None] * self._N
+#         log_res = onp.vstack([y_distr[k].log_prob(x=self._y.T)
+#                              for k in range(self._M)])
+#         log_res = onp.log(self._p.reshape(-1, 1)) + log_res
+#         res = onp.exp(log_res)
+#         res = res/(res.sum(0).reshape(1, -1))
+#         for i in range(self._N):
+#             s_distr_cond[i] = categorical_distr(pi=res[:, i], rng=rng)
+#         return s_distr_cond
+
+#     def getCond_p(self, rng):
+#         counts = onp.bincount(self._s, minlength=int(self._M))
+#         p_distr_cond = dirichlet_distr(alpha=self._alpha_p.flatten() + counts)
+#         return p_distr_cond
+    
+#     def getCond_chisq(self, rng):
+#         chisq_distr_cond = chisquare_distr(df=self._v+self._D)
+#         return chisq_distr_cond
+
+#     # Testing
+#     def joint_log_prob(self, mu=None, Sigma=None, p=None, s=None, w=None, y=None):
+#         if mu is None:
+#             mu = self._mu
+#         if Sigma is None:
+#             Sigma = self._Sigma
+#         if p is None:
+#             p = self._p
+#         if s is None:
+#             s = self._s
+#         if w is None:
+#             w = self._w
+#         if y is None:
+#             y = self._y
+#         s = s.astype('int')
+#         s_distr = categorical_distr(pi=p.flatten())
+#         y_distr = [gaussian_distr(mean=mu[s[i]].flatten(), cov=Sigma[s[i]]/w[i])
+#                    for i in range(self._N)]
+#         prior_log_prob = onp.array([self._mu_distr_prior[k].log_prob(mu[k]) + self._Sigma_distr_prior[k].log_prob(
+#             Sigma[k]) for k in range(self._M)]).sum() + self._p_distr_prior.log_prob(p) + s_distr.log_prob(s) + self._chisquare_distr.log_prob(self._v*w).sum()
+#         likelihood_log_prob = onp.array(
+#             [y_distr[i].log_prob(y[i, :].T) for i in range(self._N)]).sum()
+#         return prior_log_prob + likelihood_log_prob
+
+#     def testCond_mu(self):
+#         self.drawPrior()
+#         self.drawLikelihood()
+#         mu_tm1 = self._mu.copy()
+#         mu_t, mu_distr_cond = self.drawPosterior_mu(onp.random.default_rng())
+#         diff_cond_log_prob = onp.array([mu_distr_cond[k].log_prob(
+#             mu_t[k]) - mu_distr_cond[k].log_prob(mu_tm1[k]) for k in range(self._M)]).sum()
+#         diff_joint_log_prob = self.joint_log_prob(
+#             mu=mu_t) - self.joint_log_prob(mu=mu_tm1)
+#         assert onp.allclose(diff_cond_log_prob, diff_joint_log_prob)
+#         return True
+
+#     def testCond_Sigma(self):
+#         self.drawPrior()
+#         self.drawLikelihood()
+#         Sigma_tm1 = self._Sigma.copy()
+#         Sigma_t, Sigma_distr_cond = self.drawPosterior_Sigma(
+#             onp.random.RandomState())
+#         diff_cond_log_prob = onp.array([Sigma_distr_cond[k].log_prob(
+#             Sigma_t[k]) - Sigma_distr_cond[k].log_prob(Sigma_tm1[k]) for k in range(self._M)]).sum()
+#         diff_joint_log_prob = self.joint_log_prob(
+#             Sigma=Sigma_t) - self.joint_log_prob(Sigma=Sigma_tm1)
+#         assert onp.allclose(diff_cond_log_prob, diff_joint_log_prob)
+#         return True
+
+#     def testCond_s(self):
+#         self.drawPrior()
+#         self.drawLikelihood()
+#         s_tm1 = self._s.copy()
+#         s_t, s_distr_cond = self.drawPosterior_s(onp.random.default_rng())
+#         diff_cond_log_prob = onp.array([s_distr_cond[i].log_prob(
+#             s_t[i]) - s_distr_cond[i].log_prob(s_tm1[i]) for i in range(self._N)]).sum()
+#         diff_joint_log_prob = self.joint_log_prob(s=s_t) - self.joint_log_prob(s=s_tm1)
+#         assert onp.allclose(diff_cond_log_prob, diff_joint_log_prob)
+#         return True
+
+#     def testCond_w(self):
+#         self.drawPrior()
+#         self.drawLikelihood()
+#         w_tm1 = self._w.copy()
+#         w_t, chisq_coeff, chisq_distr_cond = self.drawPosterior_w(onp.random.default_rng())
+#         diff_cond_log_w = chisq_distr_cond.log_prob(chisq_coeff*w_t).sum() - chisq_distr_cond.log_prob(chisq_coeff*w_tm1).sum()
+#         diff_joint_log_w = self.joint_log_prob(w=w_t) - self.joint_log_prob(w=w_tm1)
+#         assert onp.allclose(diff_cond_log_w, diff_joint_log_w)
+#         return True
+
+#     def testCond_p(self):
+#         self.drawPrior()
+#         self.drawLikelihood()
+#         p_tm1 = self._p.copy()
+#         p_t, p_distr_cond = self.drawPosterior_p(onp.random.default_rng())
+#         diff_cond_log_prob = p_distr_cond.log_prob(p_t) - p_distr_cond.log_prob(p_tm1)
+#         diff_joint_log_prob = self.joint_log_prob(p=p_t) - self.joint_log_prob(p=p_tm1)
+#         assert onp.allclose(diff_cond_log_prob, diff_joint_log_prob)
+#         return True
+
+#     def testCond(self):
+#         self.testCond_mu()
+#         self.testCond_Sigma()
+#         self.testCond_p()
+#         self.testCond_s()
+#         self.testCond_w()
+#         return True
+
+# '''
+# Geweke Errors
+
+# 1. The prior distribution of p is beta(1, 1), whereas the posterior simulator assumes a beta(2, 2) prior distribution.
+# 2. In the successive-conditional simulator, the observables simulator ignores w_t from the posterior simulator. Instead, it uses fresh values of w_t ~ chi^2(v)/v to construct y_t
+# 3. The degrees of freedom in the conditional posterior distribution of each w_t is taken to be 5, rather than its correct value of 6.
+# 4. The variance of the Gaussian conditional posterior distribution of mu is erroneously set to 0.
+# 5. The correct algorithm generates s_t (conditional on all unknowns except w_t) and then generates w_t conditional on
+# all unknowns including s_t just drawn. In the error, w_t is drawn several steps later in the Gibbs sampling algorithm
+# rather than immediately after s_t.
+# '''
 
 ''' 
-Mixture of d-dimensional t-distributions
+Mixture of d-dimensional Gaussians
 Parameters:
-    D: dimension of each t-distribution
-    v: degrees of freedom of each t-distribution
+    D: dimension of each Gaussian
     M: mixture number
     N: observation number
     m_mu, S_mu: hyperparameters (mean and variance) for Gaussian prior on mu. Must be provided as lists
     v_Sigma, Psi_Sigma: hyperparameters for Inverse Wishart prior on Sigma. When D=1, reduces to Inverse Gamma with alpha=v/2 and beta=Psi/2
     alpha_p: hyperparameters for Dirichlet prior on p.
 '''
-class t_mixture_sampler(model_sampler):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+# class gaussian_mixture_sampler(model_sampler):
+#     def __init__(self, **kwargs):
+#         super().__init__(**kwargs)
 
-        # Check inputs
-        for attr in ['_D', '_M', '_N', '_v', '_m_mu', '_S_mu', '_v_Sigma', '_Psi_Sigma', '_alpha_p']:
-            assert hasattr(self, attr)
+#         # Check inputs
+#         for attr in ['_D', '_M', '_N', '_m_mu', '_S_mu', '_v_Sigma', '_Psi_Sigma', '_alpha_p']:
+#             assert hasattr(self, attr)
 
-        self._D = int(self._D)
-        self._M = int(self._M)
-        self._N = int(self._N)
-        self._alpha_p = onp.array(self._alpha_p).flatten()
+#         self._D = int(self._D)
+#         self._M = int(self._M)
+#         self._N = int(self._N)
+#         self._alpha_p = onp.array(self._alpha_p).reshape(self._M, 1)
 
-        assert len(self._m_mu) == len(self._S_mu)
-        assert len(self._S_mu) == len(self._v_Sigma)
-        assert len(self._v_Sigma) == len(self._Psi_Sigma)
-        assert len(self._Psi_Sigma) == self._M
+#         assert len(self._m_mu) == len(self._S_mu)
+#         assert len(self._S_mu) == len(self._v_Sigma)
+#         assert len(self._v_Sigma) == len(self._Psi_Sigma)
+#         assert len(self._Psi_Sigma) == self._M
 
-        assert onp.vstack(self._m_mu).shape == (self._D*self._M, 1)
+#         assert onp.vstack(self._m_mu).shape == (self._D*self._M, 1)
 
-        for k in range(self._M):
-            assert square_dim(self._S_mu[k]) == self._D
-            assert square_dim(self._v_Sigma[k]) == self._D
-            assert square_dim(self._Psi_Sigma[k]) == self._D
+#         for k in range(self._M):
+#             assert square_dim(self._S_mu[k]) == self._D
+#             assert square_dim(self._v_Sigma[k]) == 1
+#             assert square_dim(self._Psi_Sigma[k]) == self._D
+#         pass
 
-        assert self._alpha_p.shape == (self._M,)
-        pass
+#     @property
+#     def sample_dim(self):
+#         # (y) + (Sigma, mu, p) + (s)
+#         return self._D*self._N + (self._D ** 2 + self._D + 1)*self._M - 1 + self._N
 
-    @property
-    def sample_dim(self):
-        # (y) + (Sigma, mu, p) + (s, w)
-        return self._D*self._N + (self._D ** 2 + self._D + 1)*self._M - 1 + 2*self._N
+#     @property
+#     def theta_indices(self):
+#         return onp.arange(self._N * self._D, self._N * self._D + (self._D ** 2 + self._D + 1)*self._M - 1)
 
-    @property
-    def theta_indices(self):
-        return onp.arange(self._N * self._D, self._N + (self._D ** 2 + self._D + 1)*self._M - 1)
+#     def drawPrior(self, rng=None):
+#         if rng is None:
+#             rng = onp.random.Generator(onp.random.MT19937())
+        
+#         # Set random state for invwishart sampling
+#         rng_randState = onp.random.RandomState()
+#         rng_randState.set_state(rng.bit_generator.state)
 
-    def drawPrior(self, rng=None):
-        if rng is None:
-            rng = onp.random.Generator(onp.random.MT19937())
+#         if not hasattr(self, '_p_distr_prior'):
+#             self._mu_distr_prior = [gaussian_distr(mean=self._m_mu[k], cov=self._S_mu[k], rng=rng) for k in range(self._M)]
+#             self._Sigma_distr_prior = [invwishart_distr(df=self._v_Sigma[k], scale=self._Psi_Sigma[k], rng=rng_randState) for k in range(self._M)]
+#             self._p_distr_prior = dirichlet_distr(alpha=self._alpha_p, rng=rng)
 
-        # Set random state for invwishart sampling
-        rng_randState = onp.random.RandomState()
-        rng_randState.set_state(rng.bit_generator.state)
+#         self._mu = [self._mu_distr_prior[k].sample() for k in range(int(self._M))]
+#         self._Sigma = [self._Sigma_distr_prior[k].sample() for k in range(int(self._M))]
+#         self._p = self._p_distr_prior.sample().flatten()
 
-        if not hasattr(self, '_p_distr_prior'):
-            self._mu_distr_prior = [gaussian_distr(
-                mean=self._m_mu[k], cov=self._S_mu[k], rng=rng) for k in range(self._M)]
-            self._Sigma_distr_prior = [invwishart_distr(
-                df=self._v_Sigma[k], scale=self._Psi_Sigma[k], rng=rng_randState) for k in range(self._M)]
-            self._p_distr_prior = dirichlet_distr(alpha=self._alpha_p, rng=rng)
+#         # draw latent variable s
+#         s_distr = categorical_distr(pi=self._p.flatten())
+#         self._s = s_distr.sample(num_samples=self._N).flatten()
+#         return onp.hstack([onp.array(self._mu).reshape(1,-1).flatten(), onp.array(self._Sigma).reshape(1,-1).flatten(), self._p[:-1], self._s])
 
-        self._mu = [self._mu_distr_prior[k].sample()
-                    for k in range(int(self._M))]
-        self._Sigma = [self._Sigma_distr_prior[k].sample()
-                       for k in range(int(self._M))]
-        self._p = self._p_distr_prior.sample().flatten()
+#     def drawLikelihood(self, rng=None):
+#         if rng is None:
+#             rng = onp.random.Generator(onp.random.MT19937())
+#         if not hasattr(self, '_y'):
+#             self._y = onp.empty([self._N, self._D])
+        
+#         y_distr = [gaussian_distr(mean=self._mu[k].flatten(), cov=self._Sigma[k], rng=rng) for k in range(self._M)]
+#         for i in range(self._N):
+#             self._y[i, :] = y_distr[self._s[i]].sample().flatten()
 
-        # draw latent variable s, auxiliary variable w
-        s_distr = categorical_distr(pi=self._p.flatten(), rng=rng)
-        self._s = s_distr.sample(num_samples=self._N).flatten()
-        if not hasattr(self, '_chisquare_distr'):
-            self._chisquare_distr = chisquare_distr(df=self._v, rng=rng)
-        self._w = self._chisquare_distr.sample(num_samples=self._N).flatten()/self._v
+#         return self._y.reshape(1,-1).flatten()
 
-        return onp.hstack([onp.array(self._mu).reshape(1, -1).flatten(), onp.array(self._Sigma).reshape(1, -1).flatten(), self._p[:-1], self._s, self._w])
+#     def drawPosterior(self, rng=None):
+#         if rng is None:
+#             rng = onp.random.Generator(onp.random.MT19937())
+        
+#         # Set random state for invwishart sampling
+#         rng_randState = onp.random.RandomState()
+#         rng_randState.set_state(rng.bit_generator.state)
+        
+#         self.drawPosterior_s(rng)
+#         self.drawPosterior_Sigma(rng_randState)
+#         self.drawPosterior_mu(rng)
+#         self.drawPosterior_p(rng)
+        
+#         return onp.hstack([onp.array(self._mu).reshape(1,-1).flatten(), onp.array(self._Sigma).reshape(1,-1).flatten(), self._p[:-1], self._s])
+        
+#     def drawPosterior_s(self, rng):
+#         s_distr_cond = self.getCond_s(rng)
+#         proposal = self._s.copy()
+#         for i in range(self._N):
+#             proposal[i] = s_distr_cond[i].sample()
+#         self._s = proposal
+#         return proposal, s_distr_cond
+        
+        
+#     def drawPosterior_Sigma(self, rng):
+#         Sigma_distr_cond = self.getCond_Sigma(rng)
+#         proposal = self._Sigma.copy()
+#         for k in range(self._M):
+#             proposal[k] = Sigma_distr_cond[k].sample()
+#         self._Sigma = proposal
+#         return proposal, Sigma_distr_cond
+        
+#     def drawPosterior_mu(self, rng):
+#         mu_distr_cond = self.getCond_mu(rng)
+#         proposal = self._mu.copy()
+#         for k in range(self._M):
+#             proposal[k] = mu_distr_cond[k].sample()
+#         self._mu = proposal  
+#         return proposal, mu_distr_cond
+        
+#     def drawPosterior_p(self, rng):
+#         p_distr_cond = self.getCond_p(rng)
+#         proposal = p_distr_cond.sample().flatten()
+#         self._p = proposal
+#         return proposal, p_distr_cond
 
-    def drawLikelihood(self, rng=None):
-        if rng is None:
-            rng = onp.random.Generator(onp.random.MT19937())
-        if not hasattr(self, '_y'):
-            self._y = onp.empty([self._N, self._D])
+#     def getCond_mu(self, rng):
+#         mu_distr_cond = [None] * self._M
+#         for k in range(self._M):
+#             s_k = (self._s == k)
+#             num_s_k = s_k.sum()
+#             if num_s_k == 0:
+#                 m_mu_k_cond, S_mu_k_cond = self._m_mu[k], self._S_mu[k]
+#             else:
+#                 S_mu_k_inv = inv(self._S_mu[k])
+#                 Sigma_k_inv = inv(self._Sigma[k])
+#                 S_mu_k_cond = inv(S_mu_k_inv + num_s_k*Sigma_k_inv)
+#                 m_mu_k_cond = S_mu_k_cond @ (S_mu_k_inv @ self._m_mu[k] + Sigma_k_inv @ self._y[s_k, :].reshape(num_s_k, self._D).sum(0).reshape(self._D, 1))
 
-        y_distr = [t_distr(df=self._v, mean=self._mu[k].flatten(), scale=self._Sigma[k], rng=rng) for k in range(self._M)]
-        for i in range(self._N):
-            self._y[i, :] = y_distr[self._s[i]].sample(aux=self._w[i]).flatten()
+#             mu_distr_cond[k] = gaussian_distr(
+#                 mean=m_mu_k_cond, cov=S_mu_k_cond, rng=rng)
+#         return mu_distr_cond
 
-        return self._y.reshape(1, -1).flatten()
+#     def getCond_Sigma(self, rng):
+#         Sigma_distr_cond = [None] * self._M
+#         for k in range(self._M):
+#             s_k = (self._s == k)
+#             num_s_k = s_k.sum()
+#             Sigma_distr_cond[k] = invwishart_distr(df=self._v_Sigma[k] + num_s_k, 
+#                                         scale=self._Psi_Sigma[k] + XTX(self._y[s_k, :].reshape(num_s_k, self._D)-self._mu[k].reshape(1, self._D)), 
+#                                         rng=rng)         
+#         return Sigma_distr_cond
 
-    def drawPosterior(self, rng=None):
-        if rng is None:
-            rng = onp.random.Generator(onp.random.MT19937())
-
-        # Set random state for invwishart sampling
-        rng_randState = onp.random.RandomState()
-        rng_randState.set_state(rng.bit_generator.state)
-
-        self.drawPosterior_s(rng)
-        self.drawPosterior_Sigma(rng_randState)
-        self.drawPosterior_mu(rng)
-        self.drawPosterior_p(rng)
-
-        return onp.hstack([onp.array(self._mu).reshape(1, -1).flatten(), onp.array(self._Sigma).reshape(1, -1).flatten(), self._p[:-1], self._s, self._w])
-
-    def drawPosterior_s(self, rng):
-        s_distr_cond = self.getCond_s(rng)
-        proposal = self._s.copy()
-        for i in range(self._N):
-            proposal[i] = s_distr_cond[i].sample()
-        self._s = proposal
-        return proposal, s_distr_cond
-
-    def drawPosterior_w(self, rng):
-        proposal = self._w.copy()
-        chisq_coeff = (self._v + onp.array([XTWX((self._y[i, :]-self._mu[self._s[i]]).reshape(
-            -1, 1), inv(self._Sigma[self._s[i]], return_array=True)) for i in range(self._N)])).flatten()
-        chisq_distr_cond = self.getCond_chisq(rng)
-        proposal = chisq_distr_cond.sample(num_samples=self._N).flatten()/chisq_coeff
-        self._w = proposal
-        return proposal, chisq_coeff, chisq_distr_cond
-
-    def drawPosterior_Sigma(self, rng):
-        Sigma_distr_cond = self.getCond_Sigma(rng)
-        proposal = self._Sigma.copy()
-        for k in range(self._M):
-            proposal[k] = Sigma_distr_cond[k].sample()
-        self._Sigma = proposal
-        return proposal, Sigma_distr_cond
-
-    def drawPosterior_mu(self, rng):
-        mu_distr_cond = self.getCond_mu(rng)
-        proposal = self._mu.copy()
-        for k in range(self._M):
-            proposal[k] = mu_distr_cond[k].sample()
-        self._mu = proposal
-        return proposal, mu_distr_cond
-
-    def drawPosterior_p(self, rng):
-        p_distr_cond = self.getCond_p(rng)
-        proposal = p_distr_cond.sample().flatten()
-        self._p = proposal
-        return proposal, p_distr_cond
-
-    def getCond_mu(self, rng):
-        mu_distr_cond = [None] * self._M
-        for k in range(self._M):
-            s_k = (self._s == k)
-            num_s_k = s_k.sum()
-            if num_s_k == 0:
-                mu_pr, Sigma_pr = self._m_mu[k], self._S_mu[k]
-            else:
-                lst_mu_k = onp.vsplit(
-                    self._y[s_k, :].reshape(num_s_k, self._D), num_s_k)
-                lst_Sigma_k = self._Sigma[k]/self._w[s_k]
-                mu_pr, Sigma_pr = GaussianProductMV(
-                    mu_0=self._m_mu[k], Sigma_0=self._S_mu[k], lst_mu=lst_mu_k, lst_Sigma=lst_Sigma_k)
-            mu_distr_cond[k] = gaussian_distr(
-                mean=mu_pr, cov=Sigma_pr, rng=rng)
-        return mu_distr_cond
-
-    def getCond_Sigma(self, rng):
-        Sigma_distr_cond = [None] * self._M
-        for k in range(self._M):
-            s_k = (self._s == k)
-            num_s_k = s_k.sum()
-            Sigma_distr_cond[k] = invwishart_distr(df=self._v_Sigma[k] + num_s_k,
-                                                   scale=self._Psi_Sigma[k] + XTWX(self._y[s_k, :].reshape(
-                                                       num_s_k, self._D)-self._mu[k].reshape(1, self._D), diagMatrix(self._w[s_k])),
-                                                   rng=rng)
-        return Sigma_distr_cond
-
-    def getCond_s(self, rng):
-        y_distr = [t_distr(df=self._v, mean=self._mu[k].flatten(
-        ), scale=self._Sigma[k], rng=rng) for k in range(self._M)]
-        s_distr_cond = [None] * self._N
-        log_res = onp.vstack([y_distr[k].log_prob(x=self._y.T)
-                             for k in range(self._M)])
-        log_res = onp.log(self._p.reshape(-1, 1)) + log_res
-        res = onp.exp(log_res)
-        res = res/(res.sum(0).reshape(1, -1))
-        for i in range(self._N):
-            s_distr_cond[i] = categorical_distr(pi=res[:, i], rng=rng)
-        return s_distr_cond
-
-    def getCond_p(self, rng):
-        counts = onp.bincount(self._s, minlength=int(self._M))
-        p_distr_cond = dirichlet_distr(alpha=self._alpha_p.flatten() + counts)
-        return p_distr_cond
+#     def getCond_s(self, rng):
+#         y_distr = [gaussian_distr(mean=self._mu[k].flatten(), cov=self._Sigma[k], rng=rng) for k in range(self._M)]
+#         s_distr_cond = [None] * self._N
+#         log_res = onp.vstack([y_distr[k].log_prob(x=self._y.T) for k in range(self._M)])
+#         log_res = onp.log(self._p.reshape(-1,1)) + log_res
+#         res = onp.exp(log_res)
+#         res = res/(res.sum(0).reshape(1, -1))
+#         for i in range(self._N):
+#             s_distr_cond[i] = categorical_distr(pi=res[:, i], rng=rng)
+#         return s_distr_cond
     
-    def getCond_chisq(self, rng):
-        chisq_distr_cond = chisquare_distr(df=self._v+self._D)
-        return chisq_distr_cond
+#     def getCond_p(self, rng):
+#         counts = onp.bincount(self._s, minlength = int(self._M))
+#         p_distr_cond = dirichlet_distr(alpha=self._alpha_p.flatten() + counts)
+#         return p_distr_cond
+    
+#     # Testing
+#     def joint_log_prob(self, mu=None, Sigma=None, p=None, s=None, y=None):
+#         if mu is None:
+#             mu = self._mu
+#         if Sigma is None:
+#             Sigma = self._Sigma
+#         if p is None:
+#             p = self._p
+#         if s is None:
+#             s = self._s
+#         if y is None:
+#             y = self._y
+#         s_distr = categorical_distr(pi=p.flatten())
+#         y_distr = [gaussian_distr(mean=mu[k].flatten(), cov=Sigma[k]) for k in range(self._M)]
+#         prior_log_prob = onp.array([self._mu_distr_prior[k].log_prob(mu[k]) + self._Sigma_distr_prior[k].log_prob(Sigma[k]) for k in range(self._M)]).sum() + self._p_distr_prior.log_prob(p) + s_distr.log_prob(s)
+#         likelihood_log_prob = onp.array([y_distr[s[i]].log_prob(y[i, :].T) for i in range(self._N)]).sum()
+#         return prior_log_prob + likelihood_log_prob
+    
+#     def testCond_mu(self):
+#         self.drawPrior()
+#         self.drawLikelihood()
+#         mu_tm1 = self._mu.copy()
+#         mu_t, mu_distr_cond = self.drawPosterior_mu(onp.random.default_rng())
+#         diff_cond_log_prob = onp.array([mu_distr_cond[k].log_prob(mu_t[k]) - mu_distr_cond[k].log_prob(mu_tm1[k]) for k in range(self._M)]).sum()
+#         diff_joint_log_prob = self.joint_log_prob(mu=mu_t) - self.joint_log_prob(mu=mu_tm1)
+#         assert onp.allclose(diff_cond_log_prob, diff_joint_log_prob)
+#         return True
+        
+#     def testCond_Sigma(self):
+#         self.drawPrior()
+#         self.drawLikelihood()
+#         Sigma_tm1 = self._Sigma.copy()
+#         Sigma_t, Sigma_distr_cond = self.drawPosterior_Sigma(onp.random.RandomState())
+#         diff_cond_log_prob = onp.array([Sigma_distr_cond[k].log_prob(Sigma_t[k]) - Sigma_distr_cond[k].log_prob(Sigma_tm1[k]) for k in range(self._M)]).sum()
+#         diff_joint_log_prob = self.joint_log_prob(Sigma=Sigma_t) - self.joint_log_prob(Sigma=Sigma_tm1)
+#         assert onp.allclose(diff_cond_log_prob, diff_joint_log_prob)
+#         return True
+    
+#     def testCond_s(self):
+#         self.drawPrior()
+#         self.drawLikelihood()
+#         s_tm1 = self._s.copy()
+#         s_t, s_distr_cond = self.drawPosterior_s(onp.random.default_rng())
+#         diff_cond_log_prob = onp.array([s_distr_cond[i].log_prob(s_t[i]) - s_distr_cond[i].log_prob(s_tm1[i]) for i in range(self._N)]).sum()
+#         diff_joint_log_prob = self.joint_log_prob(s=s_t) - self.joint_log_prob(s=s_tm1)
+#         assert onp.allclose(diff_cond_log_prob, diff_joint_log_prob)
+#         return True
+        
+#     def testCond_p(self):
+#         self.drawPrior()
+#         self.drawLikelihood()
+#         p_tm1 = self._p.copy()
+#         p_t, p_distr_cond = self.drawPosterior_p(onp.random.default_rng())
+#         diff_cond_log_prob = p_distr_cond.log_prob(p_t) - p_distr_cond.log_prob(p_tm1)
+#         diff_joint_log_prob = self.joint_log_prob(p=p_t) - self.joint_log_prob(p=p_tm1)
+#         assert onp.allclose(diff_cond_log_prob, diff_joint_log_prob)
+#         return True
 
-    # Testing
-    def joint_log_prob(self, mu=None, Sigma=None, p=None, s=None, w=None, y=None):
-        if mu is None:
-            mu = self._mu
-        if Sigma is None:
-            Sigma = self._Sigma
-        if p is None:
-            p = self._p
-        if s is None:
-            s = self._s
-        if w is None:
-            w = self._w
-        if y is None:
-            y = self._y
-        s = s.astype('int')
-        s_distr = categorical_distr(pi=p.flatten())
-        y_distr = [gaussian_distr(mean=mu[s[i]].flatten(), cov=Sigma[s[i]]/w[i])
-                   for i in range(self._N)]
-        prior_log_prob = onp.array([self._mu_distr_prior[k].log_prob(mu[k]) + self._Sigma_distr_prior[k].log_prob(
-            Sigma[k]) for k in range(self._M)]).sum() + self._p_distr_prior.log_prob(p) + s_distr.log_prob(s) + self._chisquare_distr.log_prob(self._v*w).sum()
-        likelihood_log_prob = onp.array(
-            [y_distr[i].log_prob(y[i, :].T) for i in range(self._N)]).sum()
-        return prior_log_prob + likelihood_log_prob
-
-    def testCond_mu(self):
-        self.drawPrior()
-        self.drawLikelihood()
-        mu_tm1 = self._mu.copy()
-        mu_t, mu_distr_cond = self.drawPosterior_mu(onp.random.default_rng())
-        diff_cond_log_prob = onp.array([mu_distr_cond[k].log_prob(
-            mu_t[k]) - mu_distr_cond[k].log_prob(mu_tm1[k]) for k in range(self._M)]).sum()
-        diff_joint_log_prob = self.joint_log_prob(
-            mu=mu_t) - self.joint_log_prob(mu=mu_tm1)
-        assert onp.allclose(diff_cond_log_prob, diff_joint_log_prob)
-        return True
-
-    def testCond_Sigma(self):
-        self.drawPrior()
-        self.drawLikelihood()
-        Sigma_tm1 = self._Sigma.copy()
-        Sigma_t, Sigma_distr_cond = self.drawPosterior_Sigma(
-            onp.random.RandomState())
-        diff_cond_log_prob = onp.array([Sigma_distr_cond[k].log_prob(
-            Sigma_t[k]) - Sigma_distr_cond[k].log_prob(Sigma_tm1[k]) for k in range(self._M)]).sum()
-        diff_joint_log_prob = self.joint_log_prob(
-            Sigma=Sigma_t) - self.joint_log_prob(Sigma=Sigma_tm1)
-        assert onp.allclose(diff_cond_log_prob, diff_joint_log_prob)
-        return True
-
-    def testCond_s(self):
-        self.drawPrior()
-        self.drawLikelihood()
-        s_tm1 = self._s.copy()
-        s_t, s_distr_cond = self.drawPosterior_s(onp.random.default_rng())
-        diff_cond_log_prob = onp.array([s_distr_cond[i].log_prob(
-            s_t[i]) - s_distr_cond[i].log_prob(s_tm1[i]) for i in range(self._N)]).sum()
-        diff_joint_log_prob = self.joint_log_prob(s=s_t) - self.joint_log_prob(s=s_tm1)
-        assert onp.allclose(diff_cond_log_prob, diff_joint_log_prob)
-        return True
-
-    def testCond_w(self):
-        self.drawPrior()
-        self.drawLikelihood()
-        w_tm1 = self._w.copy()
-        w_t, chisq_coeff, chisq_distr_cond = self.drawPosterior_w(onp.random.default_rng())
-        diff_cond_log_w = chisq_distr_cond.log_prob(chisq_coeff*w_t).sum() - chisq_distr_cond.log_prob(chisq_coeff*w_tm1).sum()
-        diff_joint_log_w = self.joint_log_prob(w=w_t) - self.joint_log_prob(w=w_tm1)
-        assert onp.allclose(diff_cond_log_w, diff_joint_log_w)
-        return True
-
-    def testCond_p(self):
-        self.drawPrior()
-        self.drawLikelihood()
-        p_tm1 = self._p.copy()
-        p_t, p_distr_cond = self.drawPosterior_p(onp.random.default_rng())
-        diff_cond_log_prob = p_distr_cond.log_prob(p_t) - p_distr_cond.log_prob(p_tm1)
-        diff_joint_log_prob = self.joint_log_prob(p=p_t) - self.joint_log_prob(p=p_tm1)
-        assert onp.allclose(diff_cond_log_prob, diff_joint_log_prob)
-        return True
-
-    def testCond(self):
-        self.testCond_mu()
-        self.testCond_Sigma()
-        self.testCond_p()
-        self.testCond_s()
-        self.testCond_w()
-        return True
-
-'''
-Geweke Errors
-
-1. The prior distribution of p is beta(1, 1), whereas the posterior simulator assumes a beta(2, 2) prior distribution.
-2. In the successive-conditional simulator, the observables simulator ignores w_t from the posterior simulator. Instead, it uses fresh values of w_t ~ chi^2(v)/v to construct y_t
-3. The degrees of freedom in the conditional posterior distribution of each w_t is taken to be 5, rather than its correct value of 6.
-4. The variance of the Gaussian conditional posterior distribution of mu is erroneously set to 0.
-5. The correct algorithm generates s_t (conditional on all unknowns except w_t) and then generates w_t conditional on
-all unknowns including s_t just drawn. In the error, w_t is drawn several steps later in the Gibbs sampling algorithm
-rather than immediately after s_t.
-'''
+#     def testCond(self):
+#         self.testCond_mu()
+#         self.testCond_Sigma()
+#         self.testCond_p()
+#         self.testCond_s()
+#         return True
 
 ''' 
-Mixture of d-dimensional Gaussians
+Mixture of d-dimensional Gaussians. Gibbs posterior sampler collapses p for faster mixing.
 Parameters:
     D: dimension of each Gaussian
     M: mixture number
@@ -768,18 +1020,18 @@ class gaussian_mixture_sampler(model_sampler):
 
         for k in range(self._M):
             assert square_dim(self._S_mu[k]) == self._D
-            assert square_dim(self._v_Sigma[k]) == self._D
+            assert square_dim(self._v_Sigma[k]) == 1
             assert square_dim(self._Psi_Sigma[k]) == self._D
         pass
 
     @property
     def sample_dim(self):
-        # (y) + (Sigma, mu, p) + (s)
-        return self._D*self._N + (self._D ** 2 + self._D + 1)*self._M - 1 + self._N
+        # (y) + (Sigma, mu) + (s)
+        return self._D*self._N + (self._D ** 2 + self._D)*self._M + self._N
 
     @property
     def theta_indices(self):
-        return onp.arange(self._N * self._D, self._N * self._D + (self._D ** 2 + self._D + 1)*self._M - 1)
+        return onp.arange(self._N * self._D, self._N * self._D + (self._D ** 2 + self._D )*self._M)
 
     def drawPrior(self, rng=None):
         if rng is None:
@@ -789,19 +1041,19 @@ class gaussian_mixture_sampler(model_sampler):
         rng_randState = onp.random.RandomState()
         rng_randState.set_state(rng.bit_generator.state)
 
-        if not hasattr(self, '_p_distr_prior'):
+        if not hasattr(self, '_mu_distr_prior'):
             self._mu_distr_prior = [gaussian_distr(mean=self._m_mu[k], cov=self._S_mu[k], rng=rng) for k in range(self._M)]
             self._Sigma_distr_prior = [invwishart_distr(df=self._v_Sigma[k], scale=self._Psi_Sigma[k], rng=rng_randState) for k in range(self._M)]
             self._p_distr_prior = dirichlet_distr(alpha=self._alpha_p, rng=rng)
 
         self._mu = [self._mu_distr_prior[k].sample() for k in range(int(self._M))]
         self._Sigma = [self._Sigma_distr_prior[k].sample() for k in range(int(self._M))]
-        self._p = self._p_distr_prior.sample().flatten()
+        p = self._p_distr_prior.sample().flatten()
 
         # draw latent variable s
-        s_distr = categorical_distr(pi=self._p.flatten())
+        s_distr = categorical_distr(pi=p.flatten())
         self._s = s_distr.sample(num_samples=self._N).flatten()
-        return onp.hstack([onp.array(self._mu).reshape(1,-1).flatten(), onp.array(self._Sigma).reshape(1,-1).flatten(), self._p[:-1], self._s])
+        return onp.hstack([onp.array(self._mu).reshape(1,-1).flatten(), onp.array(self._Sigma).reshape(1,-1).flatten(), self._s])
 
     def drawLikelihood(self, rng=None):
         if rng is None:
@@ -826,9 +1078,8 @@ class gaussian_mixture_sampler(model_sampler):
         self.drawPosterior_s(rng)
         self.drawPosterior_Sigma(rng_randState)
         self.drawPosterior_mu(rng)
-        self.drawPosterior_p(rng)
         
-        return onp.hstack([onp.array(self._mu).reshape(1,-1).flatten(), onp.array(self._Sigma).reshape(1,-1).flatten(), self._p[:-1], self._s])
+        return onp.hstack([onp.array(self._mu).reshape(1,-1).flatten(), onp.array(self._Sigma).reshape(1,-1).flatten(), self._s])
         
     def drawPosterior_s(self, rng):
         s_distr_cond = self.getCond_s(rng)
@@ -854,12 +1105,6 @@ class gaussian_mixture_sampler(model_sampler):
             proposal[k] = mu_distr_cond[k].sample()
         self._mu = proposal  
         return proposal, mu_distr_cond
-        
-    def drawPosterior_p(self, rng):
-        p_distr_cond = self.getCond_p(rng)
-        proposal = p_distr_cond.sample().flatten()
-        self._p = proposal
-        return proposal, p_distr_cond
 
     def getCond_mu(self, rng):
         mu_distr_cond = [None] * self._M
@@ -867,12 +1112,15 @@ class gaussian_mixture_sampler(model_sampler):
             s_k = (self._s == k)
             num_s_k = s_k.sum()
             if num_s_k == 0:
-                mu_pr, Sigma_pr = self._m_mu[k], self._S_mu[k]
+                m_mu_k_cond, S_mu_k_cond = self._m_mu[k], self._S_mu[k]
             else:
-                lst_mu_k = onp.vsplit(self._y[s_k, :].reshape(num_s_k, self._D), num_s_k)
-                lst_Sigma_k = [self._Sigma[k] for _ in range(num_s_k)]
-                mu_pr, Sigma_pr = GaussianProductMV(mu_0=self._m_mu[k], Sigma_0=self._S_mu[k], lst_mu=lst_mu_k, lst_Sigma=lst_Sigma_k)
-            mu_distr_cond[k] = gaussian_distr(mean=mu_pr, cov=Sigma_pr, rng=rng)
+                S_mu_k_inv = inv(self._S_mu[k])
+                Sigma_k_inv = inv(self._Sigma[k])
+                S_mu_k_cond = inv(S_mu_k_inv + num_s_k*Sigma_k_inv)
+                m_mu_k_cond = S_mu_k_cond @ (S_mu_k_inv @ self._m_mu[k].reshape(self._D, 1) + Sigma_k_inv @ self._y[s_k, :].reshape(num_s_k, self._D).sum(0).reshape(self._D, 1))
+
+            mu_distr_cond[k] = gaussian_distr(
+                mean=m_mu_k_cond, cov=S_mu_k_cond, rng=rng)
         return mu_distr_cond
 
     def getCond_Sigma(self, rng):
@@ -886,89 +1134,62 @@ class gaussian_mixture_sampler(model_sampler):
         return Sigma_distr_cond
 
     def getCond_s(self, rng):
-        y_distr = [gaussian_distr(mean=self._mu[k].flatten(), cov=self._Sigma[k], rng=rng) for k in range(self._M)]
         s_distr_cond = [None] * self._N
-        log_res = onp.vstack([y_distr[k].log_prob(x=self._y.T) for k in range(self._M)])
-        log_res = onp.log(self._p.reshape(-1,1)) + log_res
-        res = onp.exp(log_res)
-        res = res/(res.sum(0).reshape(1, -1))
-        for i in range(self._N):
-            s_distr_cond[i] = categorical_distr(pi=res[:, i], rng=rng)
-        return s_distr_cond
-    
-    def getCond_p(self, rng):
-        counts = onp.bincount(self._s, minlength = int(self._M))
-        p_distr_cond = dirichlet_distr(alpha=self._alpha_p.flatten() + counts)
-        return p_distr_cond
-    
-    # Testing
-    def joint_log_prob(self, mu=None, Sigma=None, p=None, s=None, y=None):
-        if mu is None:
-            mu = self._mu
-        if Sigma is None:
-            Sigma = self._Sigma
-        if p is None:
-            p = self._p
-        if s is None:
-            s = self._s
-        if y is None:
-            y = self._y
-        s_distr = categorical_distr(pi=p.flatten())
-        y_distr = [gaussian_distr(mean=mu[k].flatten(), cov=Sigma[k]) for k in range(self._M)]
-        prior_log_prob = onp.array([self._mu_distr_prior[k].log_prob(mu[k]) + self._Sigma_distr_prior[k].log_prob(Sigma[k]) for k in range(self._M)]).sum() + self._p_distr_prior.log_prob(p) + s_distr.log_prob(s)
-        likelihood_log_prob = onp.array([y_distr[s[i]].log_prob(y[i, :].T) for i in range(self._N)]).sum()
-        return prior_log_prob + likelihood_log_prob
-    
-    def testCond_mu(self):
-        self.drawPrior()
-        self.drawLikelihood()
-        mu_tm1 = self._mu.copy()
-        mu_t, mu_distr_cond = self.drawPosterior_mu(onp.random.default_rng())
-        diff_cond_log_prob = onp.array([mu_distr_cond[k].log_prob(mu_t[k]) - mu_distr_cond[k].log_prob(mu_tm1[k]) for k in range(self._M)]).sum()
-        diff_joint_log_prob = self.joint_log_prob(mu=mu_t) - self.joint_log_prob(mu=mu_tm1)
-        assert onp.allclose(diff_cond_log_prob, diff_joint_log_prob)
-        return True
-        
-    def testCond_Sigma(self):
-        self.drawPrior()
-        self.drawLikelihood()
-        Sigma_tm1 = self._Sigma.copy()
-        Sigma_t, Sigma_distr_cond = self.drawPosterior_Sigma(onp.random.RandomState())
-        diff_cond_log_prob = onp.array([Sigma_distr_cond[k].log_prob(Sigma_t[k]) - Sigma_distr_cond[k].log_prob(Sigma_tm1[k]) for k in range(self._M)]).sum()
-        diff_joint_log_prob = self.joint_log_prob(Sigma=Sigma_t) - self.joint_log_prob(Sigma=Sigma_tm1)
-        assert onp.allclose(diff_cond_log_prob, diff_joint_log_prob)
-        return True
-    
-    def testCond_s(self):
-        self.drawPrior()
-        self.drawLikelihood()
-        s_tm1 = self._s.copy()
-        s_t, s_distr_cond = self.drawPosterior_s(onp.random.default_rng())
-        diff_cond_log_prob = onp.array([s_distr_cond[i].log_prob(s_t[i]) - s_distr_cond[i].log_prob(s_tm1[i]) for i in range(self._N)]).sum()
-        diff_joint_log_prob = self.joint_log_prob(s=s_t) - self.joint_log_prob(s=s_tm1)
-        assert onp.allclose(diff_cond_log_prob, diff_joint_log_prob)
-        return True
-        
-    def testCond_p(self):
-        self.drawPrior()
-        self.drawLikelihood()
-        p_tm1 = self._p.copy()
-        p_t, p_distr_cond = self.drawPosterior_p(onp.random.default_rng())
-        diff_cond_log_prob = p_distr_cond.log_prob(p_t) - p_distr_cond.log_prob(p_tm1)
-        diff_joint_log_prob = self.joint_log_prob(p=p_t) - self.joint_log_prob(p=p_tm1)
-        assert onp.allclose(diff_cond_log_prob, diff_joint_log_prob)
-        return True
+        counts = onp.bincount(self._s, minlength=int(self._M))
+        log_p_s_prior = onp.log(((self._alpha_p.flatten() + counts).reshape(1, -1) - onp.eye(self._M))/(self._N+self._alpha_p.sum()-1)) # M -> M
 
-    def testCond(self):
-        self.testCond_mu()
-        self.testCond_Sigma()
-        self.testCond_p()
-        self.testCond_s()
-        return True
-      
-    
+        y_distr = [gaussian_distr(mean=self._mu[k].flatten(), cov=self._Sigma[k], rng=rng) for k in range(self._M)]
+        res = onp.vstack([y_distr[k].log_prob(x=self._y.T) for k in range(self._M)]) # M x N
+
+        # Multiply by prior terms
+        res += onp.hstack([log_p_s_prior[self._s[i],:].reshape(self._M, 1) for i in range(self._N)])
+        res = onp.exp(res)
+        res = res/(res.sum(0).reshape(1, -1))
+
+        for i in range(self._N):
+            s_distr_cond[i] = categorical_distr(pi=res[:, i] , rng=rng)
+        return s_distr_cond
+
 '''
-RJ Bayesian Lasso
+Error 1: in the Sigma Gibbs step, use all y for each mixture component
+'''
+class gaussian_mixture_sampler_error_1(gaussian_mixture_sampler):
+    def getCond_Sigma(self, rng):
+        Sigma_distr_cond = [None] * self._M
+        for k in range(self._M):
+            s_k = (self._s == k)
+            num_s_k = s_k.sum()
+            # scale_new = self._Psi_Sigma[k] + XTX(self._y[s_k, :].reshape(num_s_k, self._D)-self._mu[k].reshape(1, self._D)) # correct
+            scale_new = self._Psi_Sigma[k] + XTX(self._y-self._mu[k].reshape(1, self._D))
+            Sigma_distr_cond[k] = invwishart_distr(df=self._v_Sigma[k] + num_s_k, 
+                                        scale=scale_new, 
+                                        rng=rng)
+        return Sigma_distr_cond
+
+'''
+Error 2: in the s Gibbs step, forget to subtract current observations from the prior term 
+'''
+class gaussian_mixture_sampler_error_2(gaussian_mixture_sampler):
+     def getCond_s(self, rng):
+        s_distr_cond = [None] * self._N
+        counts = onp.bincount(self._s, minlength=int(self._M))
+        # log_p_s_prior = onp.log(((self._alpha_p.flatten() + counts).reshape(1, -1) - onp.eye(self._M))/(self._N+self._alpha_p.sum()-1)) # Correct
+        log_p_s_prior = onp.log(((self._alpha_p.flatten() + counts).reshape(1, -1) - onp.identity(self._M) + onp.identity(self._M))/(self._N+self._alpha_p.sum()))
+
+        y_distr = [gaussian_distr(mean=self._mu[k].flatten(), cov=self._Sigma[k], rng=rng) for k in range(self._M)]
+        res = onp.vstack([y_distr[k].log_prob(x=self._y.T) for k in range(self._M)]) # M x N
+
+        # Multiply by prior terms
+        res += onp.hstack([log_p_s_prior[self._s[i],:].reshape(self._M, 1) for i in range(self._N)])
+        res = onp.exp(res)
+        res = res/(res.sum(0).reshape(1, -1))
+
+        for i in range(self._N):
+            s_distr_cond[i] = categorical_distr(pi=res[:, i] , rng=rng)
+        return s_distr_cond
+
+'''
+Bayesian Lasso. Reversible Jump MCMC posterior sampler
 Model based on (Chen, Wang, and McKeown 2011), with approximate sampling method from (Korattikara, Chen, and Welling 2014)
 '''
 class bayes_lasso_sampler(model_sampler):

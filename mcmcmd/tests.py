@@ -3,6 +3,9 @@ import numpy as onp
 import shogun as sg
 from matplotlib import pyplot as plt
 from scipy.stats import norm
+from scipy.stats import ks_2samp, chisquare, rankdata
+from scipy.special import perm
+from arch.covariance.kernel import Bartlett
 import os
 import pickle
 from time import perf_counter
@@ -31,42 +34,62 @@ def rbf_kernel(X, Y, tau):
 ############################# Geweke test #############################
 #######################################################################
 
-'''
-Calculate the squared standard error of the estimate of E[`g`] (Geweke 1999, 3.7-8).
-'''
-def geweke_se2(g, L=0, center=True):
-    L = int(L)
-    M = g.shape[0]
-    if center==True:
-        g -= g.mean(axis=0)
-    v = geweke_c(g=g, s=0)
-    v_L = 0.
-    if L != 0:
-        w = (L-onp.arange(0, L))/L  # weights
-        v *= w[0]
-        assert L > 0 and L < M
-        for s in range(1, L):
-            v_L += w[s] * geweke_c(g=g, s=s)
-    v = (v + 2*v_L)/M
-    return v
+# '''
+# Calculate the squared standard error of the estimate of E[`g`] (Geweke 1999, 3.7-8).
+# '''
+# def geweke_se2(g, L=0, center=True):
+#     L = int(L)
+#     M = g.shape[0]
+#     if center==True:
+#         g -= g.mean(axis=0)
+#     v = geweke_c(g=g, s=0)
+#     v_L = 0.
+#     if L != 0:
+#         w = (L-onp.arange(0, L))/L  # weights
+#         v *= w[0]
+#         assert L > 0 and L < M
+#         for s in range(1, L):
+#             v_L += w[s] * geweke_c(g=g, s=s)
+#     v = (v + 2*v_L)/M
+#     return v
+
+# '''
+# Calculate the biased `s`-lag autocovariance of *centered* samples `g`
+# '''
+# def geweke_c(g, s):
+#     if s == 0:
+#         out = (g ** 2).mean(axis=0)
+#     else:
+#         M = g.shape[0]
+#         out = ((g[s:, :]) * (g[:(M-s), :])).sum(0)/float(M)  # biased
+#     return out
 
 '''
-Calculate the biased `s`-lag autocovariance of *centered* samples `g`
+Calculate the squared standard error of the estimate of E[`g`] (Geweke 1999, 3.7-8). If `L`=None, automatically selects bandwidth for the lag window based on an asymptotic MSE criterion (Andrews 1991). This assumes that `g` is fourth-moment stationary and the autocovariances are L1-summable.
 '''
-def geweke_c(g, s):
-    if s==0:
-        out = (g ** 2).mean(axis = 0)
+def geweke_se2(g, L=None, force_int_L=False):
+    if len(g.shape) == 1:
+        g = g.reshape(-1, 1)
+    M = g.shape[0]
+    if L is not None:
+        bw = max(L-1, 0)
     else:
-        M = g.shape[0]
-        out = ((g[s:, :]) * (g[:(M-s), :])).sum(0)/float(M) # biased
-    return out
+        bw = None
+    v = onp.array([float(Bartlett(g[:, j], bandwidth=bw,
+                                  force_int=force_int_L).cov.long_run) for j in range(g.shape[1])])
+    v /= M
+    return v
 
 '''
 Run Geweke test (Geweke 2004) on marginal-conditional and successive-conditional test function arrays `g_mc` and `g_sc`, each row corresponding to a sample.
 Uses a maximum window size of `l`*M to estimate of the squared standard error of E[g_sc], where M is the number of SC samples.
-Example values of `l` are 0.04, 0.08, 0.15.
+Example values of `l` are 0.04, 0.08, 0.15. `l`=None for automatic lag window bandwidth selection (Andrews 1991).
+`test_correction` corrects for multiple testing if not set to `test_correction=None`; set to 'b' (for Bonferroni) or 'bh' (for Benjamini-Hochberg) are supported
 '''
-def geweke_test(g_mc, g_sc, alpha, l=0.15, use_bonferroni=False):
+def geweke_test(g_mc, g_sc, alpha=0.05, l=None, test_correction='bh'):
+    if test_correction is not None:
+        assert test_correction in ['b', 'bh']
+        num_tests = g_mc.shape[1]
     if len(g_mc.shape) == 1 or len(g_sc.shape) == 1:
         g_mc = g_mc.reshape(-1, 1)
         g_sc = g_sc.reshape(-1, 1)
@@ -74,38 +97,38 @@ def geweke_test(g_mc, g_sc, alpha, l=0.15, use_bonferroni=False):
     assert g_mc.shape[1] == g_sc.shape[1]
     
     mean_mc = g_mc.mean(axis=0)
-    se2_mc = geweke_se2(g_mc)
+    se2_mc = geweke_se2(g_mc, L=0)
 
     M_sc = float(g_sc.shape[0])
     mean_sc = g_sc.mean(axis=0)
-    L_sc = l*M_sc
-    se2_sc = geweke_se2(g_sc, L=L_sc)
-    
-    if use_bonferroni==True:
-        m = g_mc.shape[1]
+    if l is not None:
+        L_sc = l*M_sc
     else:
-        m = 1.
-    
-    threshold = norm.ppf(1.-alpha/(2.*m)) # asymptotic
-    test_statistic = (mean_mc - mean_sc)/onp.sqrt(se2_mc + se2_sc)
-    
-    result = abs(test_statistic) >= threshold
-    p_value = 2.*(1-norm.cdf(abs(test_statistic)))
-    return {'result': result, 'p_value': p_value, 'test_statistic': test_statistic, 'critical_value': threshold}
+        L_sc = None
+    se2_sc = geweke_se2(g_sc, L=L_sc)
 
-'''
-Returns a matrix with column means corresponding to the first and second empirical moments of `samples`.
-'''
-def geweke_functions(samples):
-    f1 = samples.copy()
-    n, p = f1.shape
-    f2 = onp.empty([n, int(p*(p+1)/2)])
-    counter = 0
-    for i in range(p):
-        for j in range(i+1):
-            f2[:, counter] = f1[:, i] * f1[:, j]
-            counter += 1
-    return onp.hstack([f1, f2])
+    test_statistic = (mean_mc - mean_sc)/onp.sqrt(se2_mc + se2_sc)
+    p_value = 2.*(1-norm.cdf(abs(test_statistic)))
+        
+    if test_correction == 'b':
+        threshold = norm.ppf(1.-alpha/(2.)) # asymptotic
+        alpha /= num_tests
+        result = p_value <= alpha
+    elif test_correction == 'bh':
+        threshold = None
+        rank = onp.empty_like(p_value)
+        rank[onp.argsort(p_value)] = onp.arange(1, len(p_value)+1)
+        under = p_value <= rank/num_tests * alpha
+        if under.sum() > 0:
+          rank_max = rank[under].max()
+        else:
+          rank_max = 0
+        result = rank <= rank_max
+    else:
+        threshold = norm.ppf(1.-alpha/(2.)) # asymptotic
+        result = p_value <= alpha
+    
+    return {'result': result, 'p_value': p_value, 'test_statistic': test_statistic, 'critical_value': threshold, 'test_correction': test_correction}
 
 '''
 Generate Geweke P-P plot (Grosse and Duvenaud 2014) for sample vectors x, y. Can also generate Q-Q plots.
@@ -187,54 +210,57 @@ def mmd_test(samples_p, samples_q, lst_kernels, alpha=0.05, train_test_ratio=1, 
 '''
 Generate `k` wild bootstrap processes of length `n` for the Wild MMD test. Returns an (n x k) matrix.
 '''
-def wb_process(n, k=1, l_n=20, rng=None, center=True):
+def wb_process(n, k=1, l_n=20, center=True, rng=None):
     if rng is None:
         rng = onp.random.default_rng()
     epsilon = rng.normal(size=(n, k))
     W = onp.sqrt(1-onp.exp(-2/l_n)) * epsilon
     
     for i in range(1, n):
-        W[i, :] = W[i-1, :] * onp.exp(-1/l_n) + W[i, :]
+        W[i, :] += W[i-1, :] * onp.exp(-1/l_n)
 
     if center==True:
-        W-=W.mean()
+        W -= W.mean(0).reshape(1, k)
     return W
 
 '''
 Generate wild bootstrapped MMD v-statistic for the Wild MMD test
 '''
-def mmd_wb(K_XX, K_YY, K_XY, rng=None):
+def mmd_wb(K_XX, K_YY, K_XY, normalize=True, wb_l_n=20, wb_center=True, rng=None):
     if rng is None:
         rng = onp.random.default_rng()
     n_X, n_Y = K_XY.shape
+    z = 1.
     if n_X == n_Y:
+        if normalize == True:
+            z = n_X
         W = wb_process(n_X).reshape(-1, 1)
-        return (W.T @ (K_XX + K_YY - 2*K_XY) @ W)/n_X
+        return z*(W.T @ (K_XX + K_YY - 2*K_XY) @ W)/(n_X**2)
     else:
-        n = n_X + n_Y
-        rho_x = n_X/n
-        rho_y = n_Y/n
-        w_X = wb_process(n_X, rng=rng).reshape(-1, 1)
-        w_Y = wb_process(n_Y, rng=rng).reshape(-1, 1)
-        return rho_x*rho_y*n*(1./n_X**2 * w_X.T @ K_XX @ w_X + 1./n_Y**2 * w_Y.T @ K_YY @ w_Y - 2./(n_X*n_Y) * w_X.T @ K_XY @ w_Y) 
+        w_X = wb_process(n_X, l_n=wb_l_n, center=wb_center, rng=rng).reshape(-1, 1)
+        w_Y = wb_process(n_Y, l_n=wb_l_n, center=wb_center, rng=rng).reshape(-1, 1)
+        if normalize == True:
+            z = n_X * n_Y / (n_X + n_Y)
+        return z*(1./n_X**2 * w_X.T @ K_XX @ w_X + 1./n_Y**2 * w_Y.T @ K_YY @ w_Y - 2./(n_X*n_Y) * w_X.T @ K_XY @ w_Y) 
 
 '''
-Generate MMD v-statistic for the Wild MMD test
+Generate (squared) MMD v-statistic for the Wild MMD test
 '''
-def mmd_v(K_XX, K_YY, K_XY):
+def mmd_v(K_XX, K_YY, K_XY, normalize=True):
     n_X, n_Y = K_XY.shape
+    z = 1.
     if n_X == n_Y:
-        return n_X * (K_XX + K_YY - 2*K_XY).mean()
-    else:    
-        n = n_X + n_Y
-        rho_x = n_X/n
-        rho_y = n_Y/n
-        return rho_x*rho_y*n*(1./n_X**2 * K_XX.sum() + 1./n_Y**2 * K_YY.sum() - 2./(n_X*n_Y) * K_XY.sum())
+        if normalize == True:
+            z = n_X
+    else:
+        if normalize == True:
+            z = n_X * n_Y / (n_X + n_Y)
+    return z*(K_XX.mean() + K_YY.mean() - 2.*K_XY.mean())
 
 '''
 Run Wild MMD test on samples with shape (n x p)
 '''
-def mmd_wb_test(X, Y, f_kernel, alpha, null_samples=100, rng=None):
+def mmd_wb_test(X, Y, f_kernel, alpha=0.05, null_samples=200, wb_l_n=20, wb_center=True, rng=None):
     if len(X.shape) == 1:
         X = X.reshape(X.shape[0], 1)
     if len(Y.shape) == 1:
@@ -248,7 +274,7 @@ def mmd_wb_test(X, Y, f_kernel, alpha, null_samples=100, rng=None):
     
     B = onp.empty(null_samples)
     for i in range(null_samples):
-        B[i] = mmd_wb(K_XX, K_YY, K_XY, rng=rng)
+        B[i] = mmd_wb(K_XX, K_YY, K_XY, normalize=True, wb_l_n=wb_l_n, wb_center=wb_center, rng=rng)
 
     threshold = onp.quantile(B, 1.-alpha)
     test_statistic = mmd_v(K_XX, K_YY, K_XY)
@@ -256,6 +282,231 @@ def mmd_wb_test(X, Y, f_kernel, alpha, null_samples=100, rng=None):
     p_value = (B >= test_statistic).mean() # one-sided
     
     return {'result':result, 'p_value':p_value, 'test_statistic':test_statistic, 'critical_value':threshold}
+
+
+'''
+Generate (squared) MMD u-statistic for the Wild MMD test
+'''
+def mmd_u(K_XX, K_YY, K_XY, normalize=True):
+    assert K_XY.shape[0] == K_XY.shape[1]
+    n = K_XY.shape[0]
+    if normalize == True:
+        z = n
+    else:
+        z = 1.
+    return z*(1./(n*(n-1)) * (K_XX.sum() - onp.diag(K_XX).sum()) + 1./(n*(n-1)) * (K_YY.sum() - onp.diag(K_YY).sum()) - 2.*K_XY.mean())
+
+
+'''
+Estimate MMD variance
+'''
+def mmd_var(K_XX, K_YY, K_XY):
+    assert K_XY.shape[0] == K_XY.shape[1]
+
+    n = K_XY.shape[0]
+    K_XY_sum = K_XY.sum()
+
+    K_XX_tilde = K_XX.copy()
+    onp.fill_diagonal(K_XX_tilde, 0.)
+    K_XX_tilde_sum = K_XX_tilde.sum()
+
+    K_YY_tilde = K_YY.copy()
+    onp.fill_diagonal(K_YY_tilde, 0.)
+    K_YY_tilde_sum = K_YY_tilde.sum()
+
+    var = 4/perm(n, 4) * (onp.linalg.norm(K_XX_tilde.sum(1))**2 + onp.linalg.norm(K_YY_tilde.sum(1))**2) + \
+        4*(n**2-n-1)/(n**3*(n-1)**2) * (onp.linalg.norm(K_XY.sum(0))**2 + onp.linalg.norm(K_XY.sum(1))**2) + \
+        -8/(n**2*(n**2-3*n+2)) * ((K_XX_tilde @ K_XY).sum() + (K_XY @ K_YY_tilde).sum()) + \
+        8/(n**2*perm(n, 3)) * (K_XX_tilde_sum + K_YY_tilde_sum) * K_XY_sum + \
+        -2*(2*n-3)/(perm(n, 2)*perm(n, 4))*(K_XX_tilde_sum**2 + K_YY_tilde_sum**2) + \
+        -4*(2*n-3)/(n**3*(n-1)**3) * K_XY_sum**2 + \
+        -2/(n*(n**3-6*n**2+11*n-6)) * (onp.linalg.norm(K_XX_tilde)**2 + onp.linalg.norm(K_YY_tilde)**2) + \
+        4*(n-2)/(n**2*(n-1)**3)*onp.linalg.norm(K_XY)**2
+
+    return var
+  
+# From Sutherland et al. 2016. For checking
+def mmd_var_alt(K_XX, K_XY, K_YY):
+    m = K_XX.shape[0]
+
+    diag_X = onp.diag(K_XX)
+    diag_Y = onp.diag(K_YY)
+
+    sum_diag_X = diag_X.sum()
+    sum_diag_Y = diag_Y.sum()
+
+    sum_diag2_X = diag_X.dot(diag_X)
+    sum_diag2_Y = diag_Y.dot(diag_Y)
+
+    Kt_XX_sums = K_XX.sum(axis=1) - diag_X
+    Kt_YY_sums = K_YY.sum(axis=1) - diag_Y
+    K_XY_sums_0 = K_XY.sum(axis=0)
+    K_XY_sums_1 = K_XY.sum(axis=1)
+
+    Kt_XX_sum = Kt_XX_sums.sum()
+    Kt_YY_sum = Kt_YY_sums.sum()
+    K_XY_sum = K_XY_sums_0.sum()
+
+    Kt_XX_2_sum = (K_XX ** 2).sum() - sum_diag2_X
+    Kt_YY_2_sum = (K_YY ** 2).sum() - sum_diag2_Y
+    K_XY_2_sum  = (K_XY ** 2).sum()
+
+
+    var_est = (
+          2 / (m**2 * (m-1)**2) * (
+              2 * Kt_XX_sums.dot(Kt_XX_sums) - Kt_XX_2_sum
+            + 2 * Kt_YY_sums.dot(Kt_YY_sums) - Kt_YY_2_sum)
+        - (4*m-6) / (m**3 * (m-1)**3) * (Kt_XX_sum**2 + Kt_YY_sum**2)
+        + 4*(m-2) / (m**3 * (m-1)**2) * (
+              K_XY_sums_1.dot(K_XY_sums_1)
+            + K_XY_sums_0.dot(K_XY_sums_0))
+        - 4 * (m-3) / (m**3 * (m-1)**2) * K_XY_2_sum
+        - (8*m - 12) / (m**5 * (m-1)) * K_XY_sum**2
+        + 8 / (m**3 * (m-1)) * (
+              1/m * (Kt_XX_sum + Kt_YY_sum) * K_XY_sum
+            - Kt_XX_sums.dot(K_XY_sums_1)
+            - Kt_YY_sums.dot(K_XY_sums_0))
+    )
+
+    return var_est
+
+
+'''
+Learn RBF kernel width for Wild Bootstrap MMD by maximizing the (unbiased) MMD t-statistic
+`lst_tau` is a list of candidate widths, and `X` and `Y` are (n x p) *training* samples
+'''
+def learn_kernel_rbf(lst_tau, X, Y, alpha=0.05):
+    if len(X.shape) == 1:
+        X = X.reshape(X.shape[0], 1)
+    if len(Y.shape) == 1:
+        Y = Y.reshape(Y.shape[0], 1)
+
+    assert X.shape == Y.shape
+    n = X.shape[0]
+    min_variance = 1e-8
+    
+    # Maximize t-stat
+    lst_objective = [None]*len(lst_tau)
+    objective_max = -onp.inf
+    for i, tau in enumerate(lst_tau):
+        f_kernel = lambda X, Y: rbf_kernel(X, Y, tau)
+        K_XX = f_kernel(X, X)
+        K_YY = f_kernel(Y, Y)
+        K_XY = f_kernel(X, Y)
+        
+        test_statistic = mmd_u(K_XX, K_YY, K_XY, normalize=False)
+        variance = mmd_var(K_XX, K_YY, K_XY)
+        objective = test_statistic/onp.sqrt(max(variance, min_variance))
+        lst_objective[i] = objective
+        if objective >= objective_max:
+            objective_max = objective
+            tau_opt = tau
+    
+    return tau_opt, lst_tau, lst_objective
+
+
+
+#######################################################################
+#################### Tests from Gandy & Scott 2020 ##################
+#######################################################################
+
+def ks_test(X, Y, alpha=0.05):
+    assert len(X.shape) == 2
+    assert len(Y.shape) == 2
+    assert X.shape[1] == Y.shape[1]
+    p_values = onp.array([ks_2samp(X[:, j], Y[:, j]).pvalue for j in range(X.shape[1])])
+    result = (p_values <= alpha/X.shape[1]) # Bonferroni correction  
+    return {'result': result, 'p_value': p_values}
+
+def rank_stat(model, L, rng=None):
+    if rng is None:
+        rng = onp.random.default_rng()
+    
+    M = rng.choice(L)
+
+    chain = onp.zeros(shape=(L, len(model.theta_indices)))
+    chain[M, :] = model.drawPrior()
+
+    y = model.drawLikelihood()
+    
+    stateDict = model.__dict__.copy()
+
+    # Backward
+    for i in range(M-1, -1, -1):
+        chain[i, :] = model.drawPosterior()
+
+    # Forward
+    model.__dict__ = stateDict.copy()
+    for j in range(M+1, L):
+        chain[j, :] = model.drawPosterior()
+    
+    # Apply test functions
+    chain = onp.hstack([onp.repeat(y.reshape(1, model._N), repeats=L, axis=0), chain])
+    chain = model.test_functions(chain)
+    return rankdata(chain, 'ordinal', axis = 0)[M, :]
+
+def rank_test(model, N, L, alpha=0.05, rng=None):
+    if rng is None:
+        rng = onp.random.default_rng()
+
+    ranks = onp.vstack([rank_stat(model=model, L=L) for _ in range(N)])
+    f_obs = onp.apply_along_axis(lambda x: onp.bincount(x, minlength=L), axis=0, arr=ranks-1)
+    p_values = onp.array([chisquare(f_obs[:, j]).pvalue for j in range(ranks.shape[1])])
+    
+    result = (p_values <= alpha/ranks.shape[1]) # Bonferroni correction  
+    return {'result': result, 'p_value': p_values}    
+
+# Sequential wrapper
+def f_test_sequential(sample_size, model, test_type, **kwargs):
+    assert test_type in ['rank', 'ks', 'mmd', 'mmd-wb', 'geweke']
+        
+    if test_type == 'rank':
+        p_values = rank_test(model, N=500, L=5)['p_value']
+    elif test_type in ['ks', 'mmd']:
+        X = model.test_functions(model.sample_mc(sample_size))
+        Y = model.test_functions(model.sample_bc(sample_size, burn_in_samples=5))
+        if test_type == 'ks':
+            p_values = ks_test(X, Y)['p_value']
+        elif test_type == 'mmd':
+            p_values = mmd_test(X, Y, sg.GaussianKernel(64, tau=1))['p_value']
+    elif test_type in ['mmd-wb', 'geweke']:
+        if test_type == 'mmd-wb':
+            mmd_test_size = 500
+            mmd_thinning = onp.arange(0, int(sample_size), 1)#int(sample_size/mmd_test_size))
+            X = model.test_functions(model.sample_mc(mmd_test_size))
+            Y = model.test_functions(model.sample_sc(sample_size))
+            f_kernel = lambda X, Y: rbf_kernel(X, Y, tau=1)
+            p_values = mmd_wb_test(X, Y[mmd_thinning, :], f_kernel)['p_value']
+        elif test_type == 'geweke':
+            geweke_thinning = onp.arange(0, int(sample_size), 50)
+            X = model.test_functions(model.sample_mc(sample_size))
+            Y = model.test_functions(model.sample_sc(sample_size))
+            p_values = geweke_test(X, Y[geweke_thinning, :], l=0.15, test_correction='b')['p_value']        
+    return p_values
+    
+def sequential_test(f_test, n, alpha, k, Delta):
+    beta = alpha/k
+    gamma = beta**(1/k)
+
+    for i in range(k):
+        p = f_test(n)
+        if type(p).__name__ == 'ndarray':
+            d = p.flatten().shape[0]
+            q = onp.min(p)*d
+        else:
+            q = p
+        
+        if onp.isnan(q):
+            return True
+        if q <= beta:
+            return True
+        if q > gamma + beta:
+            break
+        beta = beta/gamma
+
+        if i == 0:
+            n = Delta * n
+    return False
 
 #######################################################################
 ############################# Experiments #############################
@@ -305,7 +556,7 @@ class experiment(object):
         return out
 
 '''
-Experiment class for comparing various marginal samples of theta using Geweke, MMD-backward, and wild-MMD-Geweke joint tests
+Experiment class for comparing various marginal samples of theta using Geweke, MMD-backward, and wild-MMD-Geweke joint tests. `tau` is the bandwidth for the MMD kernel
 '''
 class joint_test_experiment(experiment):
     def __init__(self, num_trials, nproc, seed=None, **kwargs):
