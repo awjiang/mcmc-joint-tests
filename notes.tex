@@ -189,17 +189,24 @@ A major disadvantage of the successive-conditional sampler is that it cannot be 
     \end{algorithmic}
 \end{algorithm}
 
-Since the samples are independent, we can then apply the Geweke test without the spectral variance estimator, or apply a test based on the unbiased MMD
+Since the samples are independent, we can then apply the Geweke test without the spectral variance estimator, or apply a test based on the unbiased MMD. Given $n$ samples from each distribution
 \begin{equation}
-\widehat{\mathrm{MMD}}_{\mathrm{U}}^{2}(X, Y) = \frac{1}{{m\choose 2}} \sum_{i \neq i'} k\left(X_{i}, X_{i'}\right)+\frac{1}{{m\choose 2}} \sum_{j \neq j'} k\left(Y_{j}, Y_{j'}\right)-\frac{2}{{m\choose 2}} \sum_{i \neq j} k\left(X_{i}, Y_{j}\right)
+\widehat{\mathrm{MMD}}_{\mathrm{U}}^{2}(X, Y) = \frac{1}{{n\choose 2}} \sum_{i \neq i'} k\left(X_{i}, X_{i'}\right)+\frac{1}{{n\choose 2}} \sum_{j \neq j'} k\left(Y_{j}, Y_{j'}\right)-\frac{2}{{n\choose 2}} \sum_{i \neq j} k\left(X_{i}, Y_{j}\right)
 \end{equation}
+which can be computed in quadratic time.
 
 For a significance level $\alpha$ and $B$ bootstrap samples, the testing procedure is
 \begin{itemize}
     \item Draw $\{\mathbf{y}_{1}^{(m)}, \mathbf{\theta}_{1}^{(m)}\}_{m=1}^{n}, \{\mathbf{y}_{3}^{(m)}, \mathbf{\theta}_{3}^{(m)}\}_{m=1}^{n}$
-    \item Simulate the null distribution of $n\widehat{\mathrm{MMD}}_{\mathrm{U}}^{2}$ via permutation and calculate the $1-\alpha$ empirical quantile $c_{\alpha}$
-    \item If $n\widehat{\mathrm{MMD}}_{\mathrm{U}}^{2}(\{\mathbf{y}_{1}^{(m)}, \mathbf{\theta}_{1}^{(m)}\}_{m=1}^{n}, \{\mathbf{y}_{3}^{(m)}, \mathbf{\theta}_{3}^{(m)}\}_{m=1}^{n}) \geq c_{\alpha}$, reject the null hypothesis that the distributions are the same
+    \item Simulate the null distribution of $\widehat{\mathrm{MMD}}_{\mathrm{U}}^{2}$ via permutation and calculate the $1-\alpha$ empirical quantile $c_{\alpha}$
+    \item If $\widehat{\mathrm{MMD}}_{\mathrm{U}}^{2}(\{\mathbf{y}_{1}^{(m)}, \mathbf{\theta}_{1}^{(m)}\}_{m=1}^{n}, \{\mathbf{y}_{3}^{(m)}, \mathbf{\theta}_{3}^{(m)}\}_{m=1}^{n}) \geq c_{\alpha}$, reject the null hypothesis that the distributions are the same
 \end{itemize}
+
+ A higher variance, linear time alternative can be used if the number of samples from each distribution is the same.
+\begin{equation}
+\widehat{\mathrm{MMD}}_{\mathrm{l}}^{2}(X, Y) = \frac{2}{n} \sum_{i=1}^{n/2} k(\mathbf{x}_{2i-1}, \mathbf{x}_{2i}) + k(\mathbf{y}_{2i-1}, \mathbf{y}_{2i}) - k(\mathbf{x}_{2i}, \mathbf{y}_{2i-1}) - k(\mathbf{x}_{2i-1}, \mathbf{y}_{2i})
+\end{equation}
+where $n$ is even.
 
 \section{Experiments}
 See BayesianLassoDemo.ipynb
@@ -207,9 +214,6 @@ See BayesianLassoDemo.ipynb
 \section{Notes TODO}
 \begin{itemize}
     \item Unify notation
-    \begin{itemize}
-        \item MMD tests on g rather than $\{y, \theta\}$?
-    \end{itemize}
     \item Experiments
 \end{itemize}
 
