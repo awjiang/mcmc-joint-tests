@@ -1,7 +1,6 @@
 import numpy as onp
-# import jax.numpy as np
-from scipy.stats import invwishart, laplace, norm, reciprocal, t
-from scipy.special import comb, loggamma, multigammaln
+# import jax.numpy as jnp
+import scipy
 import multiprocessing
 from functools import reduce
 from itertools import repeat
@@ -172,10 +171,10 @@ class invwishart_distr(object):
         pass
 
     def log_prob(self, x):
-        return invwishart.logpdf(x=x, df=self._df, scale=self._scale)
+        return scipy.stats.invwishart.logpdf(x=x, df=self._df, scale=self._scale)
 
     def sample(self, num_samples=1):
-        return invwishart.rvs(size=num_samples, df=self._df, scale=self._scale, random_state=self._rng)
+        return scipy.stats.invwishart.rvs(size=num_samples, df=self._df, scale=self._scale, random_state=self._rng)
 
 class gaussian_distr(object):
     def __init__(self, mean, cov, rng=None):
@@ -222,7 +221,7 @@ class t_distr(object):
 
     def log_prob(self, x):
         x = onp.array(x).reshape(self._p, -1)
-        return array_to_float(loggamma((self._df + self._p)/2.) - loggamma(self._df/2.) - 0.5*(self._p*(onp.log(self._df) + onp.log(onp.pi)) + logdet(self._scale)) - (self._df + self._p)/2. * onp.log(1. + 1./self._df * diag((x - self._mean).T @ onp.linalg.inv(self._scale) @ (x - self._mean))))
+        return array_to_float(scipy.special.loggamma((self._df + self._p)/2.) - scipy.special.loggamma(self._df/2.) - 0.5*(self._p*(onp.log(self._df) + onp.log(onp.pi)) + logdet(self._scale)) - (self._df + self._p)/2. * onp.log(1. + 1./self._df * diag((x - self._mean).T @ onp.linalg.inv(self._scale) @ (x - self._mean))))
 
     def sample(self, num_samples=1, return_aux=False, aux=None):
         gaussian = self._rng.multivariate_normal(size=num_samples, mean=onp.zeros(self._p), cov=self._scale)
@@ -253,7 +252,7 @@ class chisquare_distr(object):
         pass
     
     def log_prob(self,x):
-        return -(self._df/2. * onp.log(2) + loggamma(self._df/2.)) + (self._df/2.-1.)*onp.log(x) - x/2.
+        return -(self._df/2. * onp.log(2) + scipy.special.loggamma(self._df/2.)) + (self._df/2.-1.)*onp.log(x) - x/2.
     
     def sample(self, num_samples=1):
         return self._rng.chisquare(size=num_samples, df=self._df)
@@ -278,7 +277,7 @@ class dirichlet_distr(object):
 
     def log_prob(self, x):
         x = onp.array(x).reshape(self._k, -1)
-        return array_to_float(((self._alpha-1) * onp.log(x)).sum(axis=0) - loggamma(self._alpha).sum() + loggamma(self._alpha.sum()))
+        return array_to_float(((self._alpha-1) * onp.log(x)).sum(axis=0) - scipy.special.loggamma(self._alpha).sum() + scipy.special.loggamma(self._alpha.sum()))
 
     def sample(self, num_samples=1):
         return self._rng.dirichlet(size=num_samples, alpha=self._alpha.flatten())
@@ -383,6 +382,7 @@ class model_sampler(object):
         if seed is None:
             self._seed_sequence = onp.random.SeedSequence()
         else:
+            self._seed = seed
             self._seed_sequence = onp.random.SeedSequence(seed)
         self.init_rng()
         pass
@@ -755,16 +755,16 @@ class model_sampler(object):
 # rather than immediately after s_t.
 # '''
 
-''' 
-Mixture of d-dimensional Gaussians
-Parameters:
-    D: dimension of each Gaussian
-    M: mixture number
-    N: observation number
-    m_mu, S_mu: hyperparameters (mean and variance) for Gaussian prior on mu. Must be provided as lists
-    v_Sigma, Psi_Sigma: hyperparameters for Inverse Wishart prior on Sigma. When D=1, reduces to Inverse Gamma with alpha=v/2 and beta=Psi/2
-    alpha_p: hyperparameters for Dirichlet prior on p.
-'''
+# ''' 
+# Mixture of d-dimensional Gaussians
+# Parameters:
+#     D: dimension of each Gaussian
+#     M: mixture number
+#     N: observation number
+#     m_mu, S_mu: hyperparameters (mean and variance) for Gaussian prior on mu. Must be provided as lists
+#     v_Sigma, Psi_Sigma: hyperparameters for Inverse Wishart prior on Sigma. When D=1, reduces to Inverse Gamma with alpha=v/2 and beta=Psi/2
+#     alpha_p: hyperparameters for Dirichlet prior on p.
+# '''
 # class gaussian_mixture_sampler(model_sampler):
 #     def __init__(self, **kwargs):
 #         super().__init__(**kwargs)
@@ -1190,262 +1190,239 @@ class gaussian_mixture_sampler_error_2(gaussian_mixture_sampler):
 
 '''
 Bayesian Lasso. Reversible Jump MCMC posterior sampler
-Model based on (Chen, Wang, and McKeown 2011), with approximate sampling method from (Korattikara, Chen, and Welling 2014)
+Model based on (Chen, Wang, and McKeown 2011)
 '''
 class bayes_lasso_sampler(model_sampler):
-    def __init__(self, **kwargs):
-      self._mode = 'exact'
-      super().__init__(**kwargs)
+    def __init__(self, N=1, p=3, Lambda=1, tau=1, alpha_sigma2=3, beta_sigma2=1, epsilon_update=1, epsilon_birth=1, **kwargs):
+        self._N  = N
+        self._p = p
+        self._Lambda = Lambda
+        self._tau = tau
+        self._alpha_sigma2 = alpha_sigma2
+        self._beta_sigma2 = beta_sigma2
+        self._epsilon_update = epsilon_update
+        self._epsilon_birth = epsilon_birth
 
-      # Check inputs
-      for attr in ['_n', '_p', '_Lambda', '_tau', '_sigma', '_epsilon_update', '_epsilon_birth']:
-          assert hasattr(self, attr)
-      self._n = int(self._n)
-      self._p = int(self._p)
-      assert onp.all(onp.array([self._n, self._p, self._Lambda, self._tau,
-                                self._sigma, self._epsilon_update, self._epsilon_birth]) > 0)
-      assert self._mode in ('exact', 'approx')
-      if self._mode == 'approx':
-        assert hasattr(self, '_epsilon_approx')
-        assert hasattr(self, '_batch_size')
-        assert onp.all(onp.array([self._epsilon_approx, self._batch_size]) > 0)
-      pass
+        self._pmf_k = onp.exp(onp.arange(1, self._p+1) * onp.log(self._Lambda) -
+                          self._Lambda - scipy.special.loggamma(1+onp.arange(1, self._p+1)))
+        self._pmf_k = self._pmf_k/self._pmf_k.sum()
+        
+        super().__init__(**kwargs)
+        if not hasattr(self, '_X'):
+            self.drawData()
+        
+        # Check inputs
+        for attr in ['_N', '_p', '_Lambda', '_tau', '_alpha_sigma2', '_beta_sigma2', '_epsilon_update', '_epsilon_birth']:
+            assert hasattr(self, attr)
+        self._N   = int(self._N)
+        self._p = int(self._p)
+        assert onp.all(onp.array([self._N  , self._p, self._Lambda, self._tau,
+                                self._alpha_sigma2, self._beta_sigma2, self._epsilon_update, self._epsilon_birth]) > 0)
+        
+        self._D = 1
+        pass
 
     @property
     def sample_dim(self):
-      # y + beta
-      return self._n + self._p
+      # y + beta + sigma
+      return self._N  + self._p + 1
 
     @property
     def theta_indices(self):
-      return onp.arange(self._n, self._n + self._p)
+        return onp.arange(self._N, self._N + self._p + 1)
 
-    def log_prior(self, beta=None, gamma=None, k=None):
-      if beta is None:
-        beta = self._beta
-      if gamma is None:
-        gamma = self._gamma
-      if k is None:
-        k = self._k
-      return - loggamma(self._p+1) + loggamma(k+1) + loggamma(self._p-k+1) - self._Lambda + k*onp.log(self._Lambda) - loggamma(k+1) + laplace.logpdf(x=beta[gamma, :], scale=self._tau).sum()
+    def log_prior(self, beta=None, gamma=None, k=None, sigma=None):
+        if beta is None:
+            beta = self._beta
+        if gamma is None:
+            gamma = self._gamma
+        if k is None:
+            k = self._k
+        if sigma is None:
+            sigma = self._sigma
+        return - scipy.special.loggamma(self._p+1) + scipy.special.loggamma(k+1) + scipy.special.loggamma(self._p-k+1) - self._Lambda + k*onp.log(self._Lambda) - scipy.special.loggamma(k+1) + \
+                scipy.stats.laplace.logpdf(x=beta[gamma, :], scale=self._tau).sum() + scipy.stats.invgamma.logpdf(x=self._sigma**2, a=self._alpha_sigma2, scale=self._beta_sigma2)
 
-    def log_likelihood(self, beta=None, subset=None, return_components=False):
-      if beta is None:
-        beta = self._beta
-      if subset is None:
-        subset = onp.arange(self._n)
-      l = norm.logpdf(x=self._y[subset, :],
-                      loc=self._X[subset, :]@beta, scale=self._sigma)
-      if return_components == False:
-        l = l.sum()
-      return l
+    def log_likelihood(self, beta=None, sigma=None, y=None, return_components=False):
+        if beta is None:
+            beta = self._beta
+        if sigma is None:
+            sigma = self._sigma
+        if y is None:
+            y = self._y
+        l = scipy.stats.norm.logpdf(x=y, loc=self._X@beta, scale=sigma)
+        if return_components == False:
+            l = l.sum()
+        return l
 
-    def log_joint(self, beta=None, gamma=None, k=None):
-      if beta is None:
-        beta = self._beta
-      if gamma is None:
-        gamma = self._gamma
-      if k is None:
-        k = self._k
-      l_prior = self.log_prior(beta=beta, gamma=gamma, k=k)
-      l_likelihood = self.log_likelihood(beta=beta)
-      return l_prior + l_likelihood
+    def log_joint(self, beta=None, gamma=None, k=None, sigma=None):
+        if beta is None:
+            beta = self._beta
+        if gamma is None:
+            gamma = self._gamma
+        if k is None:
+            k = self._k
+        if sigma is None:
+            sigma = self._sigma
+        l_prior = self.log_prior(beta=beta, gamma=gamma, k=k, sigma=sigma)
+        l_likelihood = self.log_likelihood(beta=beta, sigma=sigma)
+        return l_prior + l_likelihood
 
     def drawData(self, rng=None):
-      if rng is None:
-          rng = self._rng_s
-
-      self._X = rng.normal(size=[self._n, self._p])
-      self._pmf_k = onp.exp(onp.arange(1, self._p+1) * onp.log(self._Lambda) -
-                          self._Lambda - loggamma(1+onp.arange(1, self._p+1)))
-      self._pmf_k = self._pmf_k/self._pmf_k.sum()
-      pass
+        if rng is None:
+            rng = self._rng_s
+        self._X = rng.normal(size=[self._N, self._p])
+        return self._X
 
     def drawPrior(self, rng=None):
-      if rng is None:
-          rng = self._rng_s
+        if rng is None:
+            rng = self._rng_s
+      
+        self._sigma = onp.sqrt(scipy.stats.invgamma(a=self._alpha_sigma2, scale=self._beta_sigma2).rvs())
+      
+        self._beta = onp.zeros(shape=[self._p, 1])
+        self._k = rng.choice(a=onp.arange(1, self._p+1), p=self._pmf_k)
 
-      self._beta = onp.zeros(shape=[self._p, 1])
-      self._k = rng.choice(a=onp.arange(1, self._p+1), p=self._pmf_k)
-
-      self._gamma = rng.choice(self._p, size=self._k, replace=False)
-      self._beta[self._gamma, :] = rng.laplace(
-          scale=self._tau, size=[self._k, 1])
-      return self._beta.flatten()
+        self._gamma = rng.choice(self._p, size=self._k, replace=False)
+        self._beta[self._gamma, :] = rng.laplace(
+            scale=self._tau, size=[self._k, 1])
+        return onp.hstack([self._beta.flatten(), self._sigma])
 
     def drawLikelihood(self, rng=None):
-      if rng is None:
-          rng = self._rng_s
-
-      self._y = rng.normal(loc=self._X @ self._beta,
-                           scale=self._sigma).reshape(self._n, 1)
-      return self._y.flatten()
+        if rng is None:
+            rng = self._rng_s
+        self._y = rng.normal(loc=self._X @ self._beta,
+                           scale=self._sigma).reshape(self._N, 1)
+        return self._y.flatten()
 
     def drawPosterior(self, rng=None):
-      if rng is None:
-          rng = self._rng_s
+        if rng is None:
+            rng = self._rng_s
+      
+        # Birth-Death
+        j, k_proposal, gamma_proposal, beta_proposal = self.getBirthDeathProposal(rng)
+      
+        if rng.choice(2) == 1:
+            self._sigma = onp.sqrt(scipy.stats.invgamma(a=self._alpha_sigma2 + 0.5*self._N, scale=self._beta_sigma2 + 0.5*((self._y-(self._X@self._beta))**2).sum()).rvs())
+            self.updateMH(j, k_proposal, gamma_proposal, beta_proposal, rng)
+        else:
+            self.updateMH(j, k_proposal, gamma_proposal, beta_proposal, rng)
+            self._sigma = onp.sqrt(scipy.stats.invgamma(a=self._alpha_sigma2 + 0.5*self._N, scale=self._beta_sigma2 + 0.5*((self._y-(self._X@self._beta))**2).sum()).rvs())
+        
+        return onp.hstack([self._beta.flatten(), self._sigma])
 
-      j, k_proposal, gamma_proposal, beta_proposal = self.getProposal(rng)
+    def getBirthDeathProposal(self, rng):
+        beta_proposal = self._beta.copy()
+        if self._p == 1:
+            k_proposal = self._k
+        elif self._k == 1:
+            k_proposal = self._k + rng.choice([0, 1])
+        elif self._k == self._p:
+            k_proposal = self._k + rng.choice([-1, 0])
+        else:
+            k_proposal = self._k + rng.choice([-1, 0, 1])
 
-      if self._mode == 'exact':
-        self.updateMH(j, k_proposal, gamma_proposal, beta_proposal, rng)
-      elif self._mode == 'approx':
-        self.updateApproxMH(j, k_proposal, gamma_proposal, beta_proposal, rng)
-
-      return self._beta.flatten()
-
-    def getProposal(self, rng):
-      beta_proposal = self._beta.copy()
-      if self._p == 1:
-        k_proposal = self._k
-      elif self._k == 1:
-        k_proposal = self._k + rng.choice([0, 1])
-      elif self._k == self._p:
-        k_proposal = self._k + rng.choice([-1, 0])
-      else:
-        k_proposal = self._k + rng.choice([-1, 0, 1])
-
-      if k_proposal == self._k:  # update
-        j = rng.choice(self._gamma)
-        gamma_proposal = self._gamma
-        beta_proposal[j, :] += rng.normal(scale=self._epsilon_update)
-      elif k_proposal == self._k + 1:  # birth
-        j = rng.choice(onp.setdiff1d(onp.arange(self._p), self._gamma))
-        gamma_proposal = onp.hstack([self._gamma, j])
-        beta_proposal[j, :] = rng.normal(scale=self._epsilon_birth)
-      elif k_proposal == self._k - 1:  # death
-        j = rng.choice(self._gamma)
-        gamma_proposal = self._gamma[self._gamma != j]
-        beta_proposal[j, :] = 0.
-      return j, k_proposal, gamma_proposal, beta_proposal
+        if k_proposal == self._k:  # update
+            j = rng.choice(self._gamma)
+            gamma_proposal = self._gamma
+            beta_proposal[j, :] += rng.normal(scale=self._epsilon_update)
+        elif k_proposal == self._k + 1:  # birth
+            j = rng.choice(onp.setdiff1d(onp.arange(self._p), self._gamma))
+            gamma_proposal = onp.hstack([self._gamma, j])
+            beta_proposal[j, :] = rng.normal(scale=self._epsilon_birth)
+        elif k_proposal == self._k - 1:  # death
+            j = rng.choice(self._gamma)
+            gamma_proposal = self._gamma[self._gamma != j]
+            beta_proposal[j, :] = 0.
+        return j, k_proposal, gamma_proposal, beta_proposal
 
     def gammaProposal_prob(self, gamma, gamma_proposal):
-      k = gamma.shape[0]
-      k_proposal = gamma_proposal.shape[0]
-      prob = 0.
-      if self._p == 1:
+        k = gamma.shape[0]
+        k_proposal = gamma_proposal.shape[0]
+        prob = 0.
+        if self._p == 1:
+            return prob
+        
+        num_gamma_shared = onp.intersect1d(gamma, gamma_proposal).shape[0]
+        if k == 1 and num_gamma_shared == 1:
+            if k_proposal == k+1:
+                  prob = 0.5 * 1./(self._p - k)
+            elif k_proposal == k:
+                  prob = 0.5
+        elif 1 < k and k < self._p and onp.abs(num_gamma_shared - k) <= 1:
+            if k_proposal == k+1:
+                prob = 1./3. * 1./(self._p - k)
+            elif k_proposal == k:
+                prob = 1./3.
+            elif k_proposal == k-1:
+                prob = 1./3. * 1./k
+        elif k == self._p and num_gamma_shared == self._p-1:
+            if k_proposal == k:
+                prob = 0.5
+            elif k_proposal == k-1:
+                prob = 0.5 * 1./k
         return prob
-      if k == 1 and onp.intersect1d(gamma, gamma_proposal).shape[0] == 1:
-        if k_proposal == k+1:
-          prob = 0.5 * 1./(self._p - k)
-        elif k_proposal == k:
-          prob = 0.5
-      elif 1 < k and k < self._p and onp.abs(onp.intersect1d(gamma, gamma_proposal).shape[0] - k) <= 1:
-        if k_proposal == k+1:
-          prob = 1./3. * 1./(self._p - k)
-        elif k_proposal == k:
-          prob = 1./3.
-        elif k_proposal == k-1:
-          prob = 1./3. * 1./k
-      elif k == self._p and onp.intersect1d(gamma, gamma_proposal).shape[0] == self._p-1:
-        if k_proposal == k:
-          prob = 0.5
-        elif k_proposal == k-1:
-          prob = 0.5 * 1./k
-      return prob
 
     def updateMH(self, j, k_proposal, gamma_proposal, beta_proposal, rng):
-      if k_proposal == self._k:  # update
-        MH_augment = 0.
-      elif k_proposal == self._k + 1:  # birth
-        MH_augment = onp.log(self.gammaProposal_prob(gamma_proposal, self._gamma)) - onp.log(self.gammaProposal_prob(
-            self._gamma, gamma_proposal)) - float(norm.logpdf(beta_proposal[j, :], scale=self._epsilon_birth))
-      elif k_proposal == self._k - 1:  # death
-        MH_augment = onp.log(self.gammaProposal_prob(gamma_proposal, self._gamma)) - onp.log(self.gammaProposal_prob(
-            self._gamma, gamma_proposal)) + float(norm.logpdf(self._beta[j, :], scale=self._epsilon_birth))
+        if k_proposal == self._k:  # update
+            MH_augment = 0.
+        elif k_proposal == self._k + 1:  # birth
+            MH_augment = onp.log(self.gammaProposal_prob(gamma_proposal, self._gamma)) - onp.log(self.gammaProposal_prob(
+                                self._gamma, gamma_proposal)) - float(scipy.stats.norm.logpdf(beta_proposal[j, :], scale=self._epsilon_birth))
+        elif k_proposal == self._k - 1:  # death
+            MH_augment = onp.log(self.gammaProposal_prob(gamma_proposal, self._gamma)) - onp.log(self.gammaProposal_prob(
+            self._gamma, gamma_proposal)) + float(scipy.stats.norm.logpdf(self._beta[j, :], scale=self._epsilon_birth))
 
-      diff_log_joint = self.log_joint(
-          beta=beta_proposal, gamma=gamma_proposal, k=k_proposal) - self.log_joint()
-      threshold = diff_log_joint + MH_augment
+        diff_log_joint = self.log_joint(beta=beta_proposal, gamma=gamma_proposal, k=k_proposal) - self.log_joint()
+        threshold = diff_log_joint + MH_augment
 
-      log_u = onp.log(rng.uniform())
-      if log_u <= threshold:
-        self._k = k_proposal
-        self._gamma = gamma_proposal
-        self._beta = beta_proposal
-      return log_u, threshold
-
-    def updateApproxMH(self, j, k_proposal, gamma_proposal, beta_proposal, rng):
-      # Calculate threshold
-      u = rng.uniform()
-      if k_proposal == self._k:  # update
-        MH_augment = 0.
-      elif k_proposal == self._k + 1:  # birth
-        MH_augment = -onp.log(self.gammaProposal_prob(gamma_proposal, self._gamma)) + onp.log(self.gammaProposal_prob(
-            self._gamma, gamma_proposal)) + float(norm.logpdf(beta_proposal[j, :], scale=self._epsilon_birth))
-      elif k_proposal == self._k - 1:  # death
-        MH_augment = -onp.log(self.gammaProposal_prob(gamma_proposal, self._gamma)) + onp.log(self.gammaProposal_prob(
-            self._gamma, gamma_proposal)) - float(norm.logpdf(self._beta[j, :], scale=self._epsilon_birth))
-
-      threshold = (onp.log(u) + self.log_prior() - self.log_prior(beta=beta_proposal,
-                                                                  gamma=gamma_proposal, k=k_proposal) + MH_augment)/self._n
-
-      l = 0
-      l2 = 0
-      sample = onp.array([])
-      sample_size = 0
-      permutation = rng.permutation(self._n)
-      done = False
-
-      while not done:
-        batch_size = min(self._batch_size, self._n - sample_size)
-        batch = permutation[sample_size:(sample_size+batch_size)]
-        sample = onp.hstack([sample, batch])
-
-        l_diff = self.log_likelihood(beta=beta_proposal, subset=batch, return_components=True) - \
-            self.log_likelihood(subset=batch, return_components=True)
-        l += l_diff.sum()
-        l2 += (l_diff**2).sum()
-
-        sample_size += batch_size
-
-        l_sd = onp.sqrt((l2/sample_size - (l/sample_size)**2)
-                        * sample_size/(sample_size-1))
-        l_se = l_sd/onp.sqrt(sample_size) * onp.sqrt(1 -
-                                                     (sample_size-1)/(self._n-1))
-
-        if l_se > 0:
-          test_stat = onp.abs(l-threshold)/l_se
-          delta = 1 - t.cdf(test_stat, sample_size-1)
-        else:
-          delta = 0
-        if delta <= self._epsilon_approx:
-          if l >= threshold:
+        log_u = onp.log(rng.uniform())
+        if log_u <= threshold:
             self._k = k_proposal
             self._gamma = gamma_proposal
             self._beta = beta_proposal
-          done = True
-      pass
-
-
+        return log_u, threshold
+    
+    def test_functions(self, samples):
+        num_samples = samples.shape[0]
+        y = samples[:, :self._N].reshape(num_samples, -1)
+        beta = samples[:, self.theta_indices[:-1]].reshape(num_samples, -1)
+        sigma = samples[:, self.theta_indices[-1]].reshape(num_samples, -1)
+        l = self.log_likelihood(beta=beta.T, sigma=sigma.T, \
+                             y = y.T, return_components=True).sum(0).reshape(-1,1)
+        return onp.hstack([geweke_functions(samples[:, self.theta_indices]), l])
+      
 '''
 Error 1: forget to include the transition probabilities when calculating the acceptance probabilities for the 'birth' and 'death' moves
 '''
 class bayes_lasso_sampler_error_1(bayes_lasso_sampler):
     def updateMH(self, j, k_proposal, gamma_proposal, beta_proposal, rng):
-      diff_log_joint = self.log_joint(
-          beta=beta_proposal, gamma=gamma_proposal, k=k_proposal) - self.log_joint()
-      threshold = diff_log_joint
+        diff_log_joint = self.log_joint(
+            beta=beta_proposal, gamma=gamma_proposal, k=k_proposal) - self.log_joint()
+        threshold = diff_log_joint
 
-      log_u = onp.log(rng.uniform())
-      if log_u <= threshold:
-        self._k = k_proposal
-        self._gamma = gamma_proposal
-        self._beta = beta_proposal
-      return log_u, threshold
+        log_u = onp.log(rng.uniform())
+        if log_u <= threshold:
+            self._k = k_proposal
+            self._gamma = gamma_proposal
+            self._beta = beta_proposal
+        return log_u, threshold
 
 
 '''
-Error 2: drop a '+1' in the log-prior calculation
+Error 2: drop a '+1' in the log-prior Poisson calculation
 '''
 class bayes_lasso_sampler_error_2(bayes_lasso_sampler):
-    def log_prior(self, beta=None, gamma=None, k=None):
-      if beta is None:
-        beta = self._beta
-      if gamma is None:
-        gamma = self._gamma
-      if k is None:
-        k = self._k
-    #   return - onp.log(comb(self._p, k)) - self._Lambda + k*onp.log(self._Lambda) - loggamma(k+1) + laplace.logpdf(x=beta[gamma, :], scale=self._tau).sum() # correct
-      # error
-      return - onp.log(comb(self._p, k)) - self._Lambda + k*onp.log(self._Lambda) - loggamma(k) + laplace.logpdf(x=beta[gamma, :], scale=self._tau).sum()
+    def log_prior(self, beta=None, gamma=None, k=None, sigma=None):
+        if beta is None:
+            beta = self._beta
+        if gamma is None:
+            gamma = self._gamma
+        if k is None:
+            k = self._k
+        if sigma is None:
+            sigma = self._sigma
+#         return - scipy.special.loggamma(self._p+1) + scipy.special.loggamma(k+1) + scipy.special.loggamma(self._p-k+1) - self._Lambda + k*onp.log(self._Lambda) - scipy.special.loggamma(k+1) + \
+#                 scipy.stats.laplace.logpdf(x=beta[gamma, :], scale=self._tau).sum() + scipy.stats.invgamma.logpdf(x=self._sigma**2, a=self._alpha_sigma2, scale=self._beta_sigma2) # correct
+        return - scipy.special.loggamma(self._p+1) + scipy.special.loggamma(k+1) + scipy.special.loggamma(self._p-k+1) - self._Lambda + k*onp.log(self._Lambda) - scipy.special.loggamma(k) + \
+                scipy.stats.laplace.logpdf(x=beta[gamma, :], scale=self._tau).sum() + scipy.stats.invgamma.logpdf(x=self._sigma**2, a=self._alpha_sigma2, scale=self._beta_sigma2) # error
