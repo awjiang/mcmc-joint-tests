@@ -1,4 +1,88 @@
 
+@article{bardenet_markov_2015,
+	title = {On {Markov} chain {Monte} {Carlo} methods for tall data},
+	url = {http://arxiv.org/abs/1505.02827},
+	abstract = {Markov chain Monte Carlo methods are often deemed too computationally intensive to be of any practical use for big data applications, and in particular for inference on datasets containing a large number \$n\$ of individual data points, also known as tall datasets. In scenarios where data are assumed independent, various approaches to scale up the Metropolis-Hastings algorithm in a Bayesian inference context have been recently proposed in machine learning and computational statistics. These approaches can be grouped into two categories: divide-and-conquer approaches and, subsampling-based algorithms. The aims of this article are as follows. First, we present a comprehensive review of the existing literature, commenting on the underlying assumptions and theoretical guarantees of each method. Second, by leveraging our understanding of these limitations, we propose an original subsampling-based approach which samples from a distribution provably close to the posterior distribution of interest, yet can require less than \$O(n)\$ data point likelihood evaluations at each iteration for certain statistical models in favourable scenarios. Finally, we have only been able so far to propose subsampling-based methods which display good performance in scenarios where the Bernstein-von Mises approximation of the target posterior distribution is excellent. It remains an open challenge to develop such methods in scenarios where the Bernstein-von Mises approximation is poor.},
+	urldate = {2020-09-08},
+	journal = {arXiv:1505.02827 [stat]},
+	author = {Bardenet, Rémi and Doucet, Arnaud and Holmes, Chris},
+	month = may,
+	year = {2015},
+	note = {arXiv: 1505.02827},
+	keywords = {Statistics - Computation, Statistics - Machine Learning, Statistics - Methodology}
+}
+
+@article{korattikara_austerity_2014,
+	title = {Austerity in {MCMC} {Land}: {Cutting} the {Metropolis}-{Hastings} {Budget}},
+	shorttitle = {Austerity in {MCMC} {Land}},
+	url = {http://arxiv.org/abs/1304.5299},
+	abstract = {Can we make Bayesian posterior MCMC sampling more efficient when faced with very large datasets? We argue that computing the likelihood for N datapoints in the Metropolis-Hastings (MH) test to reach a single binary decision is computationally inefficient. We introduce an approximate MH rule based on a sequential hypothesis test that allows us to accept or reject samples with high confidence using only a fraction of the data required for the exact MH rule. While this method introduces an asymptotic bias, we show that this bias can be controlled and is more than offset by a decrease in variance due to our ability to draw more samples per unit of time.},
+	urldate = {2020-09-08},
+	journal = {arXiv:1304.5299 [cs, stat]},
+	author = {Korattikara, Anoop and Chen, Yutian and Welling, Max},
+	month = feb,
+	year = {2014},
+	note = {arXiv: 1304.5299},
+	keywords = {Computer Science - Machine Learning, Statistics - Machine Learning}
+}
+
+@article{lloyd_statistical_2015,
+	title = {Statistical {Model} {Criticism} using {Kernel} {Two} {Sample} {Tests}},
+	abstract = {We propose an exploratory approach to statistical model criticism using maximum mean discrepancy (MMD) two sample tests. Typical approaches to model criticism require a practitioner to select a statistic by which to measure discrepancies between data and a statistical model. MMD two sample tests are instead constructed as an analytic maximisation over a large space of possible statistics and therefore automatically select the statistic which most shows any discrepancy. We demonstrate on synthetic data that the selected statistic, called the witness function, can be used to identify where a statistical model most misrepresents the data it was trained on. We then apply the procedure to real data where the models being assessed are restricted Boltzmann machines, deep belief networks and Gaussian process regression and demonstrate the ways in which these models fail to capture the properties of the data they are trained on.},
+	language = {en},
+	author = {Lloyd, James R and Ghahramani, Zoubin},
+	year = {2015},
+	pages = {9}
+}
+
+@article{liu_kernelized_2016,
+	title = {A {Kernelized} {Stein} {Discrepancy} for {Goodness}-of-fit {Tests}},
+	abstract = {We derive a new discrepancy statistic for measuring differences between two probability distributions based on combining Stein’s identity with the reproducing kernel Hilbert space theory. We apply our result to test how well a probabilistic model ﬁts a set of observations, and derive a new class of powerful goodness-of-ﬁt tests that are widely applicable for complex and high dimensional distributions, even for those with computationally intractable normalization constants. Both theoretical and empirical properties of our methods are studied thoroughly.},
+	language = {en},
+	author = {Liu, Qiang and Lee, Jason D and Jordan, Michael},
+	year = {2016},
+	pages = {9}
+}
+
+@inproceedings{bonferroni_il_1935,
+	address = {Rome, Italy},
+	title = {Il calcolo delle assicurazioni su gruppi di teste},
+	author = {Bonferroni, C.},
+	year = {1935},
+	pages = {13--60}
+}
+
+@article{steinwart_uence_2001,
+	title = {On the {Inﬂuence} of the {Kernel} on the {Consistency} of {Support} {Vector} {Machines}},
+	abstract = {In this article we study the generalization abilities of several classiﬁers of support vector machine (SVM) type using a certain class of kernels that we call universal. It is shown that the soft margin algorithms with universal kernels are consistent for a large class of classiﬁcation problems including some kind of noisy tasks provided that the regularization parameter is chosen well. In particular we derive a simple suﬃcient condition for this parameter in the case of Gaussian RBF kernels. On the one hand our considerations are based on an investigation of an approximation property—the so-called universality—of the used kernels that ensures that all continuous functions can be approximated by certain kernel expressions. This approximation property also gives a new insight into the role of kernels in these and other algorithms. On the other hand the results are achieved by a precise study of the underlying optimization problems of the classiﬁers. Furthermore, we show consistency for the maximal margin classiﬁer as well as for the soft margin SVM’s in the presence of large margins. In this case it turns out that also constant regularization parameters ensure consistency for the soft margin SVM’s. Finally we prove that even for simple, noise free classiﬁcation problems SVM’s with polynomial kernels can behave arbitrarily badly.},
+	language = {en},
+	author = {Steinwart, Ingo},
+	year = {2001},
+	pages = {27}
+}
+
+@article{sriperumbudur_hilbert_2010,
+	title = {Hilbert {Space} {Embeddings} and {Metrics} on {Probability} {Measures}},
+	abstract = {A Hilbert space embedding for probability measures has recently been proposed, with applications including dimensionality reduction, homogeneity testing, and independence testing. This embedding represents any probability measure as a mean element in a reproducing kernel Hilbert space (RKHS). A pseudometric on the space of probability measures can be deﬁned as the distance between distribution embeddings: we denote this as γk, indexed by the kernel function k that deﬁnes the inner product in the RKHS.},
+	language = {en},
+	author = {Sriperumbudur, Bharath K and Gretton, Arthur and Fukumizu, Kenji and Scholkopf, Bernhard and Lanckriet, Gert R G},
+	year = {2010},
+	pages = {45}
+}
+
+@book{serfling_approximation_2002,
+	address = {New York, NY},
+	edition = {Paperback ed},
+	series = {Wiley series in probability and statistics},
+	title = {Approximation theorems of mathematical statistics},
+	isbn = {978-0-471-21927-9},
+	language = {eng},
+	publisher = {Wiley},
+	author = {Serfling, Robert J.},
+	year = {2002},
+	note = {OCLC: 49527610}
+}
+
 @article{reddi_decreasing_2014,
 	title = {On the {Decreasing} {Power} of {Kernel} and {Distance} based {Nonparametric} {Hypothesis} {Tests} in {High} {Dimensions}},
 	url = {http://arxiv.org/abs/1406.2083},
@@ -172,22 +256,6 @@
 	pages = {1--5}
 }
 
-@article{liu_kernelized_nodate,
-	title = {A {Kernelized} {Stein} {Discrepancy} for {Goodness}-of-fit {Tests}},
-	abstract = {We derive a new discrepancy statistic for measuring differences between two probability distributions based on combining Stein’s identity with the reproducing kernel Hilbert space theory. We apply our result to test how well a probabilistic model ﬁts a set of observations, and derive a new class of powerful goodness-of-ﬁt tests that are widely applicable for complex and high dimensional distributions, even for those with computationally intractable normalization constants. Both theoretical and empirical properties of our methods are studied thoroughly.},
-	language = {en},
-	author = {Liu, Qiang and Lee, Jason D and Jordan, Michael},
-	pages = {9}
-}
-
-@article{sriperumbudur_hilbert_nodate,
-	title = {Hilbert {Space} {Embeddings} and {Metrics} on {Probability} {Measures}},
-	abstract = {A Hilbert space embedding for probability measures has recently been proposed, with applications including dimensionality reduction, homogeneity testing, and independence testing. This embedding represents any probability measure as a mean element in a reproducing kernel Hilbert space (RKHS). A pseudometric on the space of probability measures can be deﬁned as the distance between distribution embeddings: we denote this as γk, indexed by the kernel function k that deﬁnes the inner product in the RKHS.},
-	language = {en},
-	author = {Sriperumbudur, Bharath K and Gretton, Arthur and Fukumizu, Kenji and Scholkopf, Bernhard and Lanckriet, Gert R G},
-	pages = {45}
-}
-
 @book{steinwart_support_2008,
 	address = {New York, NY},
 	series = {Information {Science} and {Statistics}},
@@ -201,14 +269,6 @@
 	year = {2008},
 	doi = {10.1007/978-0-387-77242-4},
 	note = {ISSN: 1613-9011}
-}
-
-@article{steinwart_uence_nodate,
-	title = {On the {Inﬂuence} of the {Kernel} on the {Consistency} of {Support} {Vector} {Machines}},
-	abstract = {In this article we study the generalization abilities of several classiﬁers of support vector machine (SVM) type using a certain class of kernels that we call universal. It is shown that the soft margin algorithms with universal kernels are consistent for a large class of classiﬁcation problems including some kind of noisy tasks provided that the regularization parameter is chosen well. In particular we derive a simple suﬃcient condition for this parameter in the case of Gaussian RBF kernels. On the one hand our considerations are based on an investigation of an approximation property—the so-called universality—of the used kernels that ensures that all continuous functions can be approximated by certain kernel expressions. This approximation property also gives a new insight into the role of kernels in these and other algorithms. On the other hand the results are achieved by a precise study of the underlying optimization problems of the classiﬁers. Furthermore, we show consistency for the maximal margin classiﬁer as well as for the soft margin SVM’s in the presence of large margins. In this case it turns out that also constant regularization parameters ensure consistency for the soft margin SVM’s. Finally we prove that even for simple, noise free classiﬁcation problems SVM’s with polynomial kernels can behave arbitrarily badly.},
-	language = {en},
-	author = {Steinwart, Ingo},
-	pages = {27}
 }
 
 @article{benjamini_controlling_1995,
@@ -242,11 +302,6 @@
 	pmid = {95},
 	keywords = {Fibrinogen, Hydrogen-Ion Concentration, Molecular Conformation, Spectrometry, Fluorescence, Temperature},
 	pages = {586--590}
-}
-
-@inproceedings{bonferroni_il_nodate,
-	title = {Il calcolo delle assicurazioni su gruppi di teste},
-	author = {Bonferroni, C.}
 }
 
 @book{lehmann_testing_2005,
@@ -358,14 +413,6 @@
 	author = {Green, Peter J.},
 	year = {1995},
 	pages = {711--732}
-}
-
-@article{lloyd_statistical_nodate,
-	title = {Statistical {Model} {Criticism} using {Kernel} {Two} {Sample} {Tests}},
-	abstract = {We propose an exploratory approach to statistical model criticism using maximum mean discrepancy (MMD) two sample tests. Typical approaches to model criticism require a practitioner to select a statistic by which to measure discrepancies between data and a statistical model. MMD two sample tests are instead constructed as an analytic maximisation over a large space of possible statistics and therefore automatically select the statistic which most shows any discrepancy. We demonstrate on synthetic data that the selected statistic, called the witness function, can be used to identify where a statistical model most misrepresents the data it was trained on. We then apply the procedure to real data where the models being assessed are restricted Boltzmann machines, deep belief networks and Gaussian process regression and demonstrate the ways in which these models fail to capture the properties of the data they are trained on.},
-	language = {en},
-	author = {Lloyd, James R and Ghahramani, Zoubin},
-	pages = {9}
 }
 
 @article{metropolis_equation_1953,
@@ -524,13 +571,6 @@
 	month = jan,
 	year = {1999},
 	pages = {1--73}
-}
-
-@article{serfling_approximation_nodate,
-	title = {Approximation {Theorems} of {Mathematical} {Statistics}},
-	language = {en},
-	author = {Serfling, Robert J},
-	pages = {398}
 }
 
 @article{grzegorczyk_improving_2008,
