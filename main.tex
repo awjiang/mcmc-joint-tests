@@ -57,7 +57,7 @@
 \usetikzlibrary{shapes.geometric}
 
 \title{  	{ \includegraphics[scale=.5]{figures/ucl_logo.png}}\\
-{{\Huge Kernel Unit Tests for MCMC}}\\
+{{\Huge Kernel Tests for Markov Chain Monte Carlo Methods}}\\
 % {\large Subtitle}\\
 		}
 \date{Submission date: 11 September 2020}
@@ -72,7 +72,7 @@ I am greatly indebted to my supervisors, Arthur Gretton, Peter Orbanz, and Heish
 \newline}
 \\ \\
 \\ \\
-Arthur Gretton, Peter Orbanz, Heishiro Kanagawa}
+Supervisors: Arthur Gretton, Peter Orbanz, Heishiro Kanagawa}
 
 \begin{document}
 \maketitle
@@ -81,10 +81,7 @@ Arthur Gretton, Peter Orbanz, Heishiro Kanagawa}
 
 \newpage
 \begin{abstract}
-    In Bayesian statistics, Markov chain Monte Carlo (MCMC) algorithms provide flexible ways to sample from analytically intractable posterior distributions. However, inference based on MCMC methods suffers from two sources of error: lack of convergence and mistakes in implementation. While there are a variety of methods to detect the former, less attention has been devoted to the latter. We propose two new tests for diagnosing MCMC implementation errors based on Maximum Mean Discrepancy (MMD). They exhibit lower Type I/II error rates than the commonly used Geweke test \cite{geweke_getting_2004} and perform competitively with recently proposed alternatives in several experiments. On the other hand, the computational costs of both MMD tests are quadratic in the number of observations compared to linear or log-linear for existing tests. Finally, we provide some evidence that, unlike existing alternatives, the MMD tests generalize well to domains other than $\mathbb{R}^{d}$.
-    \\
-    \\
-    Code is available at \url{https://github.com/awjiang/mcmc-joint-tests}.
+    In Bayesian statistics, Markov chain Monte Carlo (MCMC) algorithms provide flexible ways to sample from analytically intractable posterior distributions. However, inference based on MCMC methods suffers from two sources of error: lack of convergence and mistakes in implementation. While there are a variety of methods to detect the former, less attention has been devoted to the latter. We propose two two-sample tests for diagnosing MCMC implementation errors based on Maximum Mean Discrepancy (MMD). The MMD tests exhibit lower Type I/II error rates than the commonly used Geweke test \cite{geweke_getting_2004} and perform competitively with recently proposed alternatives in several experiments. On the other hand, the computational costs of both MMD tests are quadratic in the number of observations compared to linear or log-linear for existing tests. Finally, we provide some evidence that, unlike existing alternatives, the MMD tests generalize well to domains other than $\mathbb{R}^{d}$. Source code is available at \url{https://github.com/awjiang/mcmc-kernel-tests}.
 \end{abstract}
 \setcounter{page}{1}
 \newpage
@@ -93,7 +90,9 @@ Arthur Gretton, Peter Orbanz, Heishiro Kanagawa}
 \newpage
 
 \section*{Note on Notation}
-Probability distributions and random variables are always denoted by uppercase unbolded letters (P). In $\mathbb{R}^{d}$, unbolded lowercase symbols (x) denote scalars, bolded lowercase symbols ($\mathbf{x}$) denote vectors, and bolded uppercase symbols ($\mathbf{X}$) denote matrices. In other domains, unbolded symbols (x) are used generically to refer to constituent elements.
+In this study, probability distributions and random variables are always denoted by uppercase unbolded letters (P). In $\mathbb{R}^{d}$, unbolded lowercase symbols (x) denote scalars, bolded lowercase symbols ($\mathbf{x}$) denote vectors, and bolded uppercase symbols ($\mathbf{X}$) denote matrices. In other domains, unbolded symbols (x) are used generically to refer to constituent elements.
+
+\newpage
 
 \section{Introduction}
 In Bayesian statistics, given the prior distribution of the parameters $P(\mathbf{\Theta})$ and the likelihood of the observed data $P(\mathbf{Y} | \mathbf{\Theta})$, we are interested in sampling from the posterior distribution
@@ -101,9 +100,9 @@ In Bayesian statistics, given the prior distribution of the parameters $P(\mathb
     P(\theta | y) = \frac{P(y | \theta)P(\theta)}{P(y)} \propto P(y | \theta)P(\theta)
     \label{eq:posterior}
 \end{equation}
-for inference. When the normalizer $P(y)$ is analytically intractable, directly sampling from $P(\theta | y)$ is impossible. Instead, Markov chain Monte Carlo (MCMC) algorithms draw dependent samples from a Markov chain with $P(\theta | y)$ as its stationary distribution, only requiring the density to be known up to a constant of proportionality. On the other hand, their stochastic nature may make MCMC algorithms potentially difficult to work with. Valid inference requires the eponymous Markov chain to converge to its stationary distribution; the user may stop the algorithm before it has `burned in'. To avoid this pitfall, a variety of convergence diagnostics have been proposed in the literature, for example, \cite{gelman_inference_1992,geweke_evaluating_1991}. However, fewer studies have addressed the more fundamental issue of determining whether a sampler is implemented correctly; even if the algorithm has converged, it may not have the correct stationary distribution. Particularly for complex MCMC algorithms, subtle errors such as \cite{del_negro_time_2015,karlsson_corrigendum_2017}, can escape inspection by eye. Principled tests to detect these errors may therefore be quite useful to practitioners.
+for inference. When the normalizer $P(y)$ is analytically intractable, directly sampling from $P(\theta | y)$ is impossible. Instead, Markov chain Monte Carlo (MCMC) algorithms draw dependent samples from a Markov chain with $P(\theta | y)$ as its stationary distribution, only requiring the density to be known up to a constant of proportionality. On the other hand, their stochastic nature makes MCMC algorithms potentially difficult to work with. Valid inference requires the eponymous Markov chain to converge to its stationary distribution; the user may stop the algorithm before it has `burned in'. To avoid this pitfall, a variety of convergence diagnostics have been proposed in the literature, for example, \cite{gelman_inference_1992,geweke_evaluating_1991}. However, fewer studies have addressed the more fundamental issue of determining whether a sampler is implemented correctly; even if the algorithm has converged, it may not have the correct stationary distribution. Particularly for complex MCMC algorithms, subtle errors such as \cite{del_negro_time_2015,karlsson_corrigendum_2017}, can escape inspection by eye. Principled tests to detect these errors may therefore be quite useful to practitioners.
 
-Existing tests for the correctness of MCMC samplers rely on testing a finite number of hypotheses based on scalar quantities derived from samples. If none of the hypotheses are rejected, then the test fails to reject the null hypothesis that the sampler is error-free. In many cases, testing only the correctness of, for instance, all first and second moments of the parameters, may be sufficient for the user. However, these tests will fail to detect any error not captured by the specified hypotheses. In this study, we introduce two tests based on Maximum Mean Discrepancy (MMD) in Reproducing Kernel Hilbert Spaces (RKHS) that can theoretically detect any error in the posterior sampler given the right kernel. The tests perform competitively with existing alternatives in a variety of settings, though they are more expensive to conduct, with a computational cost quadratic in the number of samples compared to linear or log-linear for existing tests. We show that kernel choice and the inclusion of hand-picked features relevant to MCMC can dramatically improve test power. In addition, unlike other tests, the tests can be applied natively in domains other than $\mathbb{R}^{d}$.
+Existing tests for the correctness of MCMC samplers rely on testing a finite number of hypotheses based on scalar quantities derived from samples. If none of the hypotheses are rejected, then the test fails to reject the null hypothesis that the sampler is error-free. In many cases, testing only the correctness of, for instance, all first and second moments of the parameters, may be sufficient for the user. However, these tests will fail to detect any error not captured by the specified hypotheses. In this study, we introduce two tests based on Maximum Mean Discrepancy (MMD) in Reproducing Kernel Hilbert Spaces (RKHS) that can theoretically detect any error in the posterior sampler given the right kernel. The tests perform competitively with existing alternatives in a variety of settings, though they are more expensive to conduct, with a computational cost quadratic in the number of samples compared to linear or log-linear for existing tests. We show that kernel choice and the inclusion of hand-picked features relevant to MCMC can dramatically improve test power. In addition, unlike other tests, the MMD tests can be applied natively in domains other than $\mathbb{R}^{d}$.
 
 \label{section:intro}
 \section{Background}
@@ -158,15 +157,16 @@ $$
 $|\frac{\partial g_{j \rightarrow j'}(\mathbf{\Theta}_{j}, \mathbf{u})}{\partial(\mathbf{\Theta}_{j}, \mathbf{u})}|$ is called the Jacobian in the literature. In practice, $g$ is often the identity function and the Jacobian is equal to one. The reverse jump $(j', \mathbf{\Theta}_{j'}') \rightarrow (j, \mathbf{\Theta}_{j})$ is similar, but uses $g^{-1}$ rather than $g$. When the dimensionality of the proposal matches the dimensionality of the current state, we have Metropolis-Hastings. See experiment 3 for an example.
 
 \subsection{Statistical Hypothesis Testing}
-This section follows \cite{casella_statistical_1990} Chapter 8 and \cite{lehmann_testing_2005} Chapter 9. 
+This section follows chapter 8 of \cite{casella_statistical_1990} and chapter 9 of \cite{lehmann_testing_2005}. 
 \begin{definition}[Two-sample Test]
     Given metric space $(M, d)$, let P and Q be two Borel probability measures defined on $M$, and let random variables $X \sim P$ and $Y \sim Q$. Given samples $\{x_{i}\}_{i=1}^{N_{x}}$, $\{y_{i}\}_{i=1}^{N_{y}}$, a statistical test $\mathcal{T}(\{x_{i}\}_{i=1}^{N_{x}}, \{y_{i}\}_{i=1}^{N_{y}}): M^{N_{X}} \times M^{N_{Y}} \rightarrow \{0, 1\}$ distinguishes between the null hypothesis $H_{0}: P=Q$ and the alternative hypothesis $H_{1}: P \neq Q$. We call testing $H_{0}$ against $H_{1}$ the two-sample problem.
 \end{definition}
-$\mathcal{T}$ compares a test statistic $s$ of the samples to a threshold $c_{\alpha}$, which is determined by design parameter (significance level) $\alpha$. If the statistic exceeds the threshold, then $\mathcal{T}$ rejects the null hypothesis; otherwise, it fails to reject $H_{0}$. Thus, the rejection region is $S_{\alpha} = \{s | s > c_{\alpha}\}$. Put another way, the test rejects $H_{0}$ when its p-value $p(s)=\inf \{\alpha | s \in S_{\alpha}\}$ is less than $\alpha$. To compare different tests, we consider their error rates.
+$\mathcal{T}$ compares a test statistic $s$ of the samples to a threshold $c_{\alpha}$, which is determined by design parameter (significance level) $\alpha$. If the statistic exceeds the threshold, then $\mathcal{T}$ rejects the null hypothesis; otherwise, it fails to reject $H_{0}$. Thus, the rejection region is $S_{\alpha} = \{s | s > c_{\alpha}\}$. Put another way, the test rejects $H_{0}$ when its p-value $p(s)=\inf \{\alpha | s \in S_{\alpha}\}$ is less than $\alpha$.
+
 \begin{definition}[Type I and Type II Errors]
     A Type I error is made when $H_{0}$ is true, but rejected by test $\mathcal{T}$. A Type II error is made when $H_{1}$ is true, but $\mathcal{T}$ fails to reject $H_{0}$.
 \end{definition}
-If $\mathcal{T}$ is consistent, in the large-sample limit, its Type I error rate is upper bounded by $\alpha$ and its Type II error rate is zero. An alternative metric to Type II error is test power, defined as $1-\beta$, where $\beta$ is the Type II error rate. Tests that require fewer samples to achieve a given Type II error rate are more efficient than others and thus, all else equal, preferable.
+If $\mathcal{T}$ is consistent, in the large-sample limit, its Type I error rate is upper bounded by $\alpha$ and its Type II error rate is zero. Consistency is essential for valid inference. Another commonly used metric is test power, defined as $1-\beta$, where $\beta$ is the Type II error rate. Tests that require fewer samples to achieve a given Type II error rate are more efficient than others and thus, all else equal, preferable.
 
 \subsubsection{Multiple Testing Corrections}
 \begin{definition}[Family-wise Error Rate]
@@ -174,19 +174,18 @@ If $\mathcal{T}$ is consistent, in the large-sample limit, its Type I error rate
 \end{definition}
 When testing multiple hypotheses, the FWER is analogous to the Type I error rate of a single test. When comparing families of tests to single tests later on, we will refer to both as Type I error rates. 
 
-For a fixed significance level $\alpha$, it is well known that the FWER grows with the size of the associated family of tests --- however, this behavior can result in the inconsistency of the family. There are numerous procedures to address this. The simplest, known as the Bonferroni procedure \cite{bonferroni_il_1935}, divides the significance level used for each individual test by the number of tests in the family. 
+For a fixed significance level $\alpha$, the FWER grows with the size of the associated family of tests --- however, this behavior can result in the inconsistency of the family. There are numerous procedures to address this. The simplest, known as the Bonferroni procedure \cite{bonferroni_il_1935}, divides the significance level used for each individual test by the number of tests in the family. 
 
-However, direct control of the FWER tends to reduce test power. Alternative procedures sacrifice some control of the FWER to combat this; these methods instead target the False Discovery Rate (FDR), defined as the proportion of rejected null hypotheses that are incorrectly rejected. When all null hypotheses are true, FDR is equivalent to FWER. One such approach is the Benjamini-Hochberg procedure \cite{benjamini_controlling_1995}
-
+Direct control of the FWER tends to reduce test power. Alternative procedures sacrifice some control of the FWER to combat this; these methods instead target the False Discovery Rate (FDR), defined as the proportion of rejected null hypotheses that are incorrectly rejected. One such approach is the Benjamini-Hochberg procedure \cite{benjamini_controlling_1995}
 \begin{enumerate}
     \item Calculate p-values $\{p_{i}\}_{i=1}^{N}$, sorted in ascending order, for family $\{\mathcal{T}_{i}\}_{i=1}^{N}$
     \item Calculate $k = \sup \{i | \frac{i}{N} p_{k} \leq \alpha \} $
     \item Reject $\mathcal{H}_{0}^{i}$ for $i \leq k$
 \end{enumerate}
-which we will use for all multiple testing corrections in this study.
+In this study, we will use the Benjamini-Hochberg procedure for all multiple testing corrections. 
 
 \subsection{Reproducing Kernel Hilbert Space (RKHS)}
-This section follows \cite{steinwart_support_2008}.
+This section follows chapter 4 of \cite{steinwart_support_2008}.
 
 \begin{definition}[Hilbert Space]
     A vector space $\mathcal{H}$ over $\mathbb{R}$ is called a Hilbert Space if there exists a function $\langle \cdot, \cdot \rangle: \mathcal{H} \times \mathcal{H} \rightarrow \mathbb{R} $ satisfying $\forall f, f_{1}, f_{2},  g \in \mathcal{H}$
@@ -231,6 +230,7 @@ Let $\mathcal{Z}$ be a compact subset of $\mathcal{X}$, and let $C(\mathcal{Z})$
 $$ \Vert f-g \Vert_{\infty} \leq \epsilon $$
 The associated RKHS of a universal kernel is called a universal RKHS \cite{steinwart_uence_2001}.
 \end{definition}
+In particular, the Gaussian kernel is universal on $\mathbb{R}^{d}$ \cite{steinwart_uence_2001}.
 
 \begin{definition}[Mean embedding]
 The mean embedding $\mu_{P}$ in RKHS $\mathcal{H}$ of a distribution $P$ is defined as 
@@ -248,7 +248,7 @@ The empirical estimate of the mean embedding is
 \end{equation}
 
 \subsection{Maximum Mean Discrepancy (MMD)}
-This discussion follows \cite{gretton_kernel_2012}. The workhorse of the tests we will present later is 
+This section follows \cite{gretton_kernel_2012}. The workhorse of the tests we will present later is 
 \begin{definition}[Maximum Mean Discrepancy (MMD)]
 Let $\mathcal{F}$ be a space of functions $f:\mathcal{X}\rightarrow \mathbb{R}$, where $\mathcal{X}$ is a non-empty set. Then the Maximum Mean Discrepancy (MMD) is defined as the integral probability metric
     \begin{equation}
@@ -358,7 +358,7 @@ where $\rho_{x} = \frac{N_{x}}{N_{x} + N_{y}}$, $\rho_{y} = \frac{N_{y}}{N_{x} +
 
 \subsection{Related Literature}
 \subsubsection{Geweke Test}
-\cite{geweke_getting_2004} proposed the first test for detecting MCMC errors in $\mathbb{R}^{d}$. It will be used as a benchmark in this study. Given the model
+The first and most well-known test for detecting MCMC errors (in $\mathbb{R}^{d}$) was proposed in \cite{geweke_getting_2004}. We will use the Geweke test as a benchmark in this study. Given the model
 \begin{align}
     P(\mathbf{Y}, \mathbf{\Theta}) = P(\mathbf{Y} | \mathbf{\Theta}) P(\mathbf{\Theta})
     \label{eq:bayesian}
@@ -425,10 +425,11 @@ Each test function thus receives a z-score; if at least one z-score deviates too
     \item Define test functions $\mathbf{g}$
     \item Draw $\mathbf{g}_{MC}, \mathbf{g}_{SC}$
     \item Calculate the left side $z_{j}$ of (\ref{eq:geweke}) for each test function element of $\mathbf{g}_{MC}, \mathbf{g}_{SC}$
-    \item If any $|z_{j}| \geq \Phi^{-1}(1-\frac{\alpha}{2})$, reject the null hypothesis that the distributions are the same
+    \item If any $|z_{j}| \geq \Phi^{-1}(1-\frac{\alpha^{*}}{2})$, reject the null hypothesis that the distributions are the same
 \end{enumerate}
+where $\alpha^{*}$ is determined by the multiple testing correction.
 
-A reasonable selection of test functions is the set of all first and second empirical moments of the samples; this is the approach taken by the original paper. In order to then control the test's Type I error, it is important to correct for multiple testing. 
+A reasonable selection of test functions is the set of all first and second empirical moments of the samples; this is the approach taken by the original paper.
 
 The computational cost of the Geweke test is linear in the number of observations, $O(N)$.
 
@@ -448,7 +449,7 @@ The test relies on the claim that, if the posterior sampler is correct, $q$ shou
 A recent study \cite{gandy_unit_2020} proposes two tests --- one two-sample and one parametric --- that we will use as benchmarks. The authors also introduce a wrapper function that, if the null hypothesis is not rejected, repeatedly runs a given test with reduced critical values, improving power while keeping false positive rates low. Though the sequential wrapper could in principle be applied in this study, it makes fair comparisons difficult, as the number of samples drawn for each test is then stochastic. We will thus focus on the tests themselves. The two-sample test is independently based on Algorithm \ref{alg:bc-sampler}, shown later. Then, the equality of the marginal distributions of each of the test functions is tested. The authors avoid prescribing a specific two-sample test, but for example, the Kolmogorov-Smirnov test may be used for continuous parameters, and a likelihood ratio test may be used in the discrete case. The parametric test in \cite{gandy_unit_2020} is similar to \cite{talts_validating_2018}, but does not require independent samples or a continuous posterior. Instead, it requires only reversibility. Each iteration of the algorithm draws $M \sim \mathrm{Unif}(\{1, \ldots, L\})$, and then draws $\mathbf{\theta}_{M}$ from the prior $P(\mathbf{\theta})$ and and $\mathbf{Y}$ from the likelihood $P(\mathbf{Y}|\mathbf{\theta}_{0})$.  The posterior sampler is then run forward to generate $\{\mathbf{\theta}_{\ell}\}_{\ell=M+1}^{L}$ and backward to generate $\{\mathbf{\theta}_{\ell}\}_{\ell=1}^{M-1}$. If the posterior is correct, then the rank statistic of $\mathbf{g}(\mathbf{Y},\mathbf{\theta}_{M})$ among $\{\mathbf{g}(\mathbf{Y},\mathbf{\theta}_{\ell})\}_{\ell=1}^{\ell=L}$ should be uniformly distributed. This is verified using a $\chi^{2}$ test. The two-sample test using Kolmogorov-Smirnov and the Rank test both involve sorting; the former compares the empirical CDFs of the test functions and the latter computes rank statistics. This means that their computational complexities are $O(N \log N)$.
 
 \section{MMD Tests}
-All existing tests suffer from several major limitations. First, they are unable to directly test the null hypothesis of interest, i.e., the joint distributions $P(\mathbf{Y}, \mathbf{\Theta})$ and $Q(\mathbf{Y}, \mathbf{\Theta})$ are the same. Instead, they require us to first anticipate dimensions in which the distributions may differ, and then test hypotheses concerning those dimensions only. If we select too few test functions, the number of errors we cannot detect will be too high. On the other hand, if we select too many test functions, correcting for multiple testing may hamstring test power. Second, the tests are limited to joint probability distributions on $\mathbb{R}^{d}$. Posterior samplers of distributions on other domains such as graphs cannot be checked without significant feature engineering. Third, drawing enough samples from Algorithm \ref{alg:sc-sampler} to offset their serial dependence may require significant computation that is difficult to parallelize beyond low-level matrix operations, though this dependence may also benefit test power by magnifying subtle errors in the sampler \cite{grosse_testing_2014}. 
+All existing tests suffer from several major limitations. First, they are unable to directly test the null hypothesis of interest, i.e., the joint distributions $P(\mathbf{Y}, \mathbf{\Theta})$ and $Q(\mathbf{Y}, \mathbf{\Theta})$ are the same. Instead, they require us to first anticipate dimensions in which the distributions may differ, and then test hypotheses concerning those dimensions only. If we select too few test functions, the number of errors we cannot detect will be too high. On the other hand, if we select too many test functions, correcting for multiple testing may hamstring test power. Second, the tests are limited to probability distributions on $\mathbb{R}^{d}$. Posterior samplers of distributions on other domains such as graphs cannot be checked without significant feature engineering. Third, drawing enough samples from Algorithm \ref{alg:sc-sampler} to offset their serial dependence may require significant computation that is difficult to parallelize beyond low-level matrix operations, though this dependence may also benefit test power by magnifying subtle errors in the sampler \cite{grosse_testing_2014}. 
 
 We propose two two-sample MMD-based tests that address the first two limitations. Instead of manually specifying many test functions, we specify a kernel, and test functions (features) are implicit. Rather than conducting many indirect tests to approximately determine if two joint distributions are equal, we can test the null hypothesis $P=Q$ directly by using a characteristic kernel. In addition, as long as we can define a valid kernel on the domain and run Algorithm \ref{alg:mc-sampler}, we can conveniently check any MCMC sampler, even on, for example, graphs or strings. The test based on Algorithm \ref{alg:bc-sampler} addresses the third limitation and can be parallelized.
 
@@ -504,8 +505,7 @@ Although MMD tests can in theory detect any difference between distributions giv
 As we will see in experiment 1, the additional features can have a dramatic effect on error detection.
 
 \subsection{Kernel Selection}
-In this study, since all our experiments can be cast as tests in $\mathbb{R}^{d}$, we will use the (characteristic, \cite{fukumizu_kernel_2007}) Gaussian kernel. There are a variety of methods in the literature for selecting the Gaussian kernel bandwidth. Though optimizing the t-statistic in \cite{sutherland_generative_2019} generally outperforms other methods for kernel parameter selection in terms of test power, this approach is relatively data-intensive, requiring a training set on which the parameters are learned. Because we assume drawing samples is expensive, we use the median heuristic, choosing the median pairwise distance in the pooled samples as the bandwidth.
-% Citation?
+In this study, since all our experiments can be cast as tests in $\mathbb{R}^{d}$, we will use the Gaussian kernel, which is characteristic on that domain. There are a variety of methods in the literature for selecting the Gaussian kernel bandwidth. Though optimizing the t-statistic in \cite{sutherland_generative_2019} generally outperforms other methods for kernel parameter selection in terms of test power, this approach is relatively data-intensive, requiring a training set on which the parameters are learned. Because we assume drawing samples is expensive, we use the median heuristic, a common choice in the literature, selecting the median pairwise L2 norm in the pooled samples as the bandwidth.
 
 If the feature scales of the sample differ by too much, the median heuristic may be inappropriate. Thus, before applying the heuristic, we first normalize the feature scales by dividing each sample feature by the corresponding pooled standard deviation.
 
@@ -514,7 +514,7 @@ We will conduct three experiments to compare the performance of the successive-c
 
 When comparing tests, it is important to consider their varying computational costs as well as their Type I/II error rates. These costs can be decomposed into two components: the cost of drawing samples and the cost of running the test. While we would ideally calculate the performance of each test keeping total computational cost fixed, this can be quite difficult. It is tedious to enumerate all elementary operations involved, and even if we complete this task, our implementations are likely suboptimal; if we try to sidestep this issue by using CPU wall time as a proxy as in \cite{gandy_unit_2020}, artificial discrepancies may arise from thermal throttling, the libraries used, etc. 
 
-We focus on keeping sampling cost approximately fixed across tests by counting the total number of samples they require from Algorithms \ref{alg:mc-sampler}, \ref{alg:sc-sampler}, or \ref{alg:bc-sampler}. To illustrate, assume we allocate a sample budget of 1800 to a test that draws samples using Algorithms \ref{alg:mc-sampler} and \ref{alg:sc-sampler}. Assume we thin the samples from Algorithm \ref{alg:sc-sampler} such that 1 out of every 5 samples are kept. We want the test to receive an equal number of samples from each Algorithm after thinning. Thus, we draw 300 MC samples and 1500 SC samples for a total of 1800, thin the SC samples, and finally conduct the test on 300 MC samples and 300 SC samples; this corresponds to a `Test Sample Size' of 300 in the figures below. We perform an analogous procedure for tests using Algorithm \ref{alg:bc-sampler}, replacing thinning with burn-in.
+We focus on keeping sampling cost approximately fixed across tests by counting the total number of samples they require from Algorithms \ref{alg:mc-sampler}, \ref{alg:sc-sampler}, or \ref{alg:bc-sampler}. To illustrate, assume we allocate a sample budget of 1800 to a test that draws samples using Algorithms \ref{alg:mc-sampler} and \ref{alg:sc-sampler}. Assume we thin the samples from Algorithm \ref{alg:sc-sampler} such that 1 out of every 5 samples are kept. We want the test to receive an equal number of samples from each Algorithm after thinning. Thus, we draw 300 samples from Algorithm \ref{alg:mc-sampler} and 1500 samples from Algorithm \ref{alg:sc-sampler} for a total of 1800, thin the latter, and finally conduct the test on 300 samples from each algorithm. This corresponds to a `Test Sample Size' of 300 in the figures below. We perform an analogous procedure for tests using Algorithm \ref{alg:bc-sampler}, replacing thinning with burn-in.
 
 \subsection{Gibbs Sampling}
 We first evaluate test performance on the Gibbs sampler from \cite{gandy_unit_2020}. The data generating process is
@@ -544,7 +544,7 @@ Since the three errors introduced in \cite{gandy_unit_2020} are all either too e
     \label{tab:ex1_errors}
 \end{table}
 
-First, we compare the performance of the MMD-BC test with the median-heuristic Gaussian kernel against the KS and Rank tests from \cite{gandy_unit_2020}. Each Type I/II error rate is calculated over 100 trials with $\alpha=0.05$ and all tests use the same sets of independent samples from Algorithms \ref{alg:mc-sampler} and \ref{alg:bc-sampler}, with $M=5$ for the BC sampler. The test functions used in each test are shown in Table \ref{tab:ex1_testfn}. The results are plotted in Figure \ref{fig:ex1_aux}.
+First, we compare the performance of the MMD-BC test with the median-heuristic Gaussian kernel against the KS and Rank tests from \cite{gandy_unit_2020}. Each Type I/II error rate is calculated over 100 trials with $\alpha=0.05$ and all tests use the same sets of independent samples from Algorithms \ref{alg:mc-sampler} and \ref{alg:bc-sampler}, with $M=5$ for Algorithm \ref{alg:bc-sampler}. The test functions used in each test are shown in Table \ref{tab:ex1_testfn}. Note that the MMD tests do not use higher moments of the parameters. The results are plotted in Figure \ref{fig:ex1_aux}.
 
 \begin{table}[H]
     \centering
@@ -564,30 +564,29 @@ First, we compare the performance of the MMD-BC test with the median-heuristic G
 \begin{figure}
     \centering
     \includegraphics[width=\textwidth]{figures/gandy_scott_aux.png}
-    \caption{Experiment 1 Type I/II error rates of BC tests with varying test functions, calculated over 100 trials with $\alpha=0.05$. The MMD-BC test used the Gaussian kernel with bandwidth set using the median heuristic, with scale-normalized data. The BC sampler set $M=5$. For the Rank test, we ordered test functions directly. For the MMD-BC and KS tests, `Test Sample Size' refers to the size of each sample seen by the tests. Though the Rank test is not a two-sample test, at a given `Test Sample Size', it runs roughly the same number of sampler iterations as the KS and MMD-BC tests.}
+    \caption{Experiment 1 Type I/II error rates of BC tests with varying test functions, calculated over 100 trials with $\alpha=0.05$. In Algorithm \ref{alg:bc-sampler}, we set $M=5$. For the MMD-BC test, $\mathbf{\theta}$ test functions refer to $\{\theta_{1}, \theta_{2}\}$; for non-MMD tests, $\mathbf{\theta}$ test functions refer to $\{\theta_{1}, \theta_{2}, \theta_{1}^{2}, \theta_{1}\theta_{2}\}$. The MMD-BC test used the Gaussian kernel with bandwidth set using the median heuristic, with scale-normalized data. For the Rank test, we ordered test functions directly. For the MMD-BC and KS tests, `Test Sample Size' refers to the size of each sample seen by the tests. Though the Rank test is not a two-sample test, at a given `Test Sample Size', it runs roughly the same number of sampler iterations as the KS and MMD-BC tests.}
     \label{fig:ex1_aux}
 \end{figure}
 
-While the Type I error rates hover around the design parameter, without the auxiliary test functions, the Type II error rates for the KS and MMD-BC tests are stuck just below 1. This is a surprising result; the Gaussian kernel is characteristic on $\mathbb{R}^{d}$, but the test seems to require a very high number of samples to distinguish between the MC and BC distributions.
+While the Type I error rates hover around the design parameter, without the auxiliary test functions, the Type II error rates for the MMD-BC and KS tests, shown in green, are stuck just below 1. Under the Mean Swap error, the marginal distributions of $\theta_{1}$ and $\theta_{2}$ are unchanged, so the two-sample tests relying solely on $\mathbf{\theta}$ test functions ($\{\theta_{1}, \theta_{2}\}$ for the MMD-BC test and $\{\theta_{1}, \theta_{2}, \theta_{1}^{2}, \theta_{1}\theta_{2}\}$ for the KS test) cannot detect this error. In the Laplace error, the posterior mean and variance are correct; because the $\mathbf{\theta}$-KS test only tests up to the second moments, it cannot detect this error either. Surprisingly, while the MMD-BC test should be able to detect the Laplace error due the the characteristic nature of the Gaussian kernel, it seems to require a very high number of samples to do so.
 
-These errors were chosen to be difficult to detect in $\mathbf{\theta}$-space. Consequently, the auxiliary test functions appear to capture the greatest discrepancies between the MC and BC samples. In the Laplace Error, the inclusion of the $\mathbf{\theta}$ test functions on top of the auxiliary test functions visibly increases the Type II error across all tests, drastically in the MMD-BC test case. This illustrates the trade-off inherent in enumerating test functions. Loosely speaking, each additional test function drastically improves detection rates for errors along that dimension, but reduces detection rates for discrepancies along orthogonal or sufficiently "distant" dimensions. In the Geweke and KS tests, this reduction in detection rates is driven by the multiple testing correction applied. For the MMD tests, this reduction occurs because the similarity between observations increases when irrelevant features are added.
+These errors were chosen to be difficult to detect in $\mathbf{\theta}$-space. Consequently, the auxiliary test functions appear to capture the greatest discrepancies between samples. In the Laplace Error, the inclusion of the $\mathbf{\theta}$ test functions on top of the auxiliary test functions visibly increases the Type II error across all tests, drastically in the MMD-BC test case. This illustrates the trade-off inherent in enumerating test functions. Loosely speaking, each additional test function drastically improves detection rates for errors along that dimension, but reduces detection rates for discrepancies along orthogonal or sufficiently "distant" dimensions. In the Geweke and KS tests, this reduction in detection rates is driven by the multiple testing correction applied. For the MMD tests, this reduction occurs because the similarity between observations increases when irrelevant features are added.
 
 The likelihood captures underlying structure in the model in a way that is otherwise difficult to characterize. We also attempted directly testing the equality of the joint distributions $P(\mathbf{Y}, \mathbf{\Theta})$ using the MMD tests using the Gaussian kernel with median heuristic (on scale-normalized samples). To be explicit, the test functions we used for this exercise (not shown) were $\mathbf{g}(\mathbf{\Theta}, \mathbf{Y}) = \begin{bmatrix}  \mathbf{Y}& \mathbf{\Theta} \end{bmatrix}^{\top}$, rather than (\ref{eq:testfn}). This approach was unable to detect the errors given the same computational budgets as in Figure \ref{fig:ex1_aux}. Computing separate Gaussian kernels on the data and parameters and using their sum or product as the test kernel was also ineffective.
 
 % Appendix?
-To the extent that the benchmark tests rely on a finite set of test functions, they are only able to examine discrepancies in a limited number of nonlinear features. In contrast, MMD-based tests are able to account for an infinite number of nonlinear features when using particular nonlinear kernels. Figure \ref{fig:ex1_kernel} illustrates the resulting benefits to power for the MMD-BC test. 
+To the extent that the benchmark tests rely on a finite set of test functions, they are only able to examine discrepancies in a limited number of nonlinear features. In contrast, MMD-based tests are able to account for an infinite number of nonlinear features when using specific nonlinear kernels. Figure \ref{fig:ex1_kernel} illustrates the resulting benefits to power for the MMD-BC test. 
 \begin{figure}
     \centering
     \includegraphics[width=\textwidth]{figures/gandy_scott_kernel.png}
-    \caption{Experiment 1 MMD-BC Type I/II error rates using $\mathbf{\Theta}$ and the likelihood and prior auxiliary variables as test functions, calculated over 100 trials with $\alpha=0.05$. The BC sampler set $M=5$. We used Gaussian kernels with median heuristic bandwidths on scale-normalized data.}
+    \caption{Experiment 1 MMD-BC Type I/II error rates using $\mathbf{\Theta}$ and the likelihood and prior auxiliary variables as test functions, calculated over 100 trials with $\alpha=0.05$. Algorithm \ref{alg:bc-sampler} set $M=5$. We used Gaussian kernels with median heuristic bandwidths on scale-normalized data.}
     \label{fig:ex1_kernel}
 \end{figure}
 
-The autocorrelation in the SC samples is extreme; though the Type II error rates are close to zero for the given hyperparameters, the SC tests require far more samples than the BC tests to push the Type I error rate below $\alpha=0.05$. Comparing efficiency across test types is not meaningful for the default parameters. However, we can reduce the autocorrelation by increasing $\sigma_{\epsilon}$ to obtain a fairer comparison. Turning this knob will allow us to analyze how the tests behave given samplers with varying mixing speeds. 
-
+The autocorrelation in the samples from Algorithm \ref{alg:sc-sampler} is extreme; though the Type II error rates are close to zero for the given hyperparameters, the SC tests require far more samples than the BC tests to push the Type I error rate below $\alpha=0.05$. Comparing efficiency across test types is not meaningful for the default parameters. However, we can reduce the autocorrelation by increasing $\sigma_{\epsilon}$ to obtain a fairer comparison. Turning this knob will allow us to analyze how the tests behave given samplers with varying mixing speeds. 
 In Figure \ref{fig:ex1_auto}, we plot the Type I/II error rates for the correct sampler and the Laplace error sampler, holding both the total sampler iterations used by each test and the test sample sizes fixed. As we might expect, when the sample autocorrelation is very high, the SC tests always reject the null hypothesis. As $\sigma_{\epsilon}$ increases and the autocorrelation falls, the SC Type I error rates fall. In this plot, the SC Type I error rates generally exceed the BC test Type I rates; this is caused by high autocorrelation in the successive-conditional chains. However, note that for a given $\sigma_{\epsilon}$, we can reduce the MMD-SC and Geweke Type I error rates by thinning the chains.
 
-As the autocorrelation decreases and mixing improves, the Type II error rates tend to decrease across the board. The exception to this trend is the initial spike experienced by the SC tests. As we move right from the leftmost extreme ($\sigma_{\epsilon} = 0.1$), the autocorrelation weakens enough that the SC tests sometimes fail to reject the null. Notably, the MMD-SC test exhibits better control of Type I error rates than the Geweke test, despite the fact that both tests use the successive-conditional simulator (Algorithm \ref{alg:sc-sampler}). On the other hand, the MMD-SC test is also less likely to correctly reject the null hypothesis. For $\sigma_{\epsilon} \geq 2.5$, the MMD-SC test has similar Type II error rates to the MMD-BC test. The KS test's Type II error rates lag behind the other tests in this setting.
+As the autocorrelation decreases and mixing improves, the Type II error rates tend to decrease across the board. The exception to this trend is the initial spike experienced by the SC tests. As we move right from the leftmost extreme ($\sigma_{\epsilon} = 0.1$), the autocorrelation weakens enough that the SC tests sometimes fail to reject the null. Notably, the MMD-SC test exhibits better control of Type I error rates than the Geweke test here, despite the fact that both tests use the successive-conditional simulator (Algorithm \ref{alg:sc-sampler}). On the other hand, the MMD-SC test is also less likely to correctly reject the null hypothesis. For $\sigma_{\epsilon} \geq 2.5$, the MMD-SC test has similar Type II error rates to the MMD-BC test. The KS test's Type II error rates lag behind the other tests in this setting.
 
 \begin{figure}[H]
     \centering
@@ -672,11 +671,9 @@ The second is a more involved reversible jump step. We start by proposing $\ell'
 \end{itemize}
 where $\epsilon_{\text{update}}, \epsilon_{\text{birth}}$ are random walk sizes. We accept proposal $\mathbf{\Theta}'$ with probability $$A(\mathbf{\Theta}'|\mathbf{\Theta}) = \min{\left(\frac{P(\mathbf{y}, \mathbf{\Theta'} | \mathbf{X} )}{P(\mathbf{y}, \mathbf{\Theta} | \mathbf{X} )} \frac{P(\mathbf{\Theta}' \rightarrow \mathbf{\Theta})}{P(\mathbf{\Theta} \rightarrow \mathbf{\Theta}')}, 1\right)}$$
 
-For this experiment, we fix the data $\mathbf{X} \in \mathbb{R}^{1 \times 3}$, with $\lambda=1$ and hyperparameters $\tau=1, a=3, b=1$. The random walk sizes are set to $\epsilon_\text{update}= \epsilon_\text{birth}=1$.
+For this experiment, we fix the design matrix $\mathbf{X} \in \mathbb{R}^{1 \times 3}$, with $\lambda=1$ and hyperparameters $\tau=1, a=3, b=1$. The random walk sizes are set to $\epsilon_\text{update}= \epsilon_\text{birth}=1$.
 
-We introduce several intentional errors into the the posterior sampler summarized in Table \ref{tab:ex2_errors}. The first error affects the Metropolis-Hastings acceptance probabilities used in the birth/death moves; it omits the jump probabilities $P(\mathbf{\Theta}' \rightarrow \mathbf{\Theta}), P(\mathbf{\Theta} \rightarrow \mathbf{\Theta}')$ from the calculation. The second error affects all of the Metropolis-Hastings acceptance probabilities. The $P(\ell|\lambda)$ factors of the joint probabilities have incorrect denominator $(\ell-1)!$ rather than $\ell!$.
-
-\begin{table}[H]
+\begin{table}
     \centering
     \begin{tabular}{l|c|c|c}
           Error & Components & Incorrect & Correct \\
@@ -688,7 +685,14 @@ We introduce several intentional errors into the the posterior sampler summarize
     \label{tab:ex2_errors}
 \end{table}
 
-The results are shown in Figure \ref{fig:ex2_comparison}, with test functions shown in Table \ref{tab:ex2_testfn}. The Type I error rates of the BC tests hover around the design parameter of $\alpha=0.05$, while the Geweke Type I error rates are elevated, at 19-25\%. The MMD-SC test has similar Type I error rates to the MMD-BC test. However, when centered wild bootstrap processes were used with the MMD-SC test (not shown), Type I error rates were elevated at around 9-13\%; this is consistent with observations in \cite{sutherland_generative_2019}. Note that these error rates, calculated using 100 trials, are relatively noisy.
+We introduce several intentional errors into the the posterior sampler summarized in Table \ref{tab:ex2_errors}. The first error affects the Metropolis-Hastings acceptance probabilities used in the birth/death moves; it omits the jump probabilities $P(\mathbf{\Theta}' \rightarrow \mathbf{\Theta}), P(\mathbf{\Theta} \rightarrow \mathbf{\Theta}')$ from the calculation. The second error affects all of the Metropolis-Hastings acceptance probabilities. The $P(\ell|\lambda)$ factors of the joint probabilities have incorrect denominator $(\ell-1)!$ rather than $\ell!$.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\textwidth]{figures/bayes_lasso_comparison.png}
+    \caption{Experiment 2 Type I/II error rates calculated over 100 trials with $\alpha=0.05$. Every $5^{\text{th}}$ sample from Algorithm \ref{alg:sc-sampler} was kept, and Algorithm \ref{alg:bc-sampler} set $M=5$. The MMD tests used Gaussian kernels with median heuristic bandwidths on scale-normalized data.}
+    \label{fig:ex2_comparison}
+\end{figure}
 
 \begin{table}[H]
     \centering
@@ -705,16 +709,11 @@ The results are shown in Figure \ref{fig:ex2_comparison}, with test functions sh
     \label{tab:ex2_testfn}
 \end{table}
 
+The results are shown in Figure \ref{fig:ex2_comparison}, with test functions shown in Table \ref{tab:ex2_testfn}. The Type I error rates of the BC tests hover around the design parameter of $\alpha=0.05$, while the Geweke Type I error rates are elevated, at 19-25\%. The MMD-SC test has similar Type I error rates to the MMD-BC test. However, when centered wild bootstrap processes were used with the MMD-SC test (not shown), Type I error rates were elevated and similar to the Geweke test; this is consistent with observations in \cite{sutherland_generative_2019}. Note that these error rates, calculated using 100 trials, are relatively noisy.
+
 For the two-sample tests, the Transition error is much easier to detect than the Poisson error, while the opposite is true for the Rank test.  Notably, while the Geweke test detects the Transition error quite easily, it essentially is unable to detect the Poisson error at the computation levels shown. In contrast, the other tests perform reasonably well, with Type II error rates that fall relatively quickly with sample size. 
 
 Across both errors, we see that the MMD-SC test has lower Type II error rates than the MMD-BC test --- further evidence of the error magnification properties of Algorithm \ref{alg:sc-sampler}. The MMD-SC test most efficiently detects the Transition error, but lags behind the KS and Rank tests in detecting the Poisson error. The performance of the KS and Rank tests are quite consitent across both errors, with the KS test detecting the errors especially efficiently. This implies that the test functions accurately capture some of the discrepancies between samples.
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\textwidth]{figures/bayes_lasso_comparison.png}
-    \caption{Experiment 2 Type I/II error rates calculated over 100 trials with $\alpha=0.05$. Every 5 BC and SC samples were kept. The MMD tests used Gaussian kernels with median heuristic bandwidths on scale-normalized data.}
-    \label{fig:ex2_comparison}
-\end{figure}
 
 
 
@@ -765,15 +764,15 @@ Placing a uniform prior on $\mathcal{G}$, the posterior is proportional to the l
     \mathcal{N}(\sum_{z_{i} \in \mathbf{pa}(x_{ij})} z_{i}, \epsilon^2)
 \end{equation}
 
-The sampling algorithm we will consider is a modified version of the MCMC scheme from \cite{madigan_bayesian_1995} and is detailed in \cite{grzegorczyk_improving_2008}. Given a graph structure $\mathcal{G}_t$, the proposal structure is sampled uniformly from the neighborhood of $\mathcal{G}_t$
+The sampling algorithm we will consider is a modified version of the MCMC scheme from \cite{madigan_bayesian_1995} and is detailed in section 2 of \cite{grzegorczyk_improving_2008}. Given a graph structure $\mathcal{G}$, the proposal structure is sampled uniformly from the neighborhood of $\mathcal{G}$
 \begin{equation}
-P(\mathcal{G}' | \mathcal{G}_t) = \frac{1}{|\mathbf{Ne}(\mathcal{G}_t)|}
+P(\mathcal{G}' | \mathcal{G}) = \frac{1}{|\mathbf{Ne}(\mathcal{G})|}
 \end{equation}
-where the neighborhood $\mathbf{Ne}(\mathcal{G}_t)$ is defined as the union of $\mathcal{G}_t$ and the set of all DAGs that can be reached by adding, deleting, or reversing an edge.
+where the neighborhood $\mathbf{Ne}(\mathcal{G})$ is defined as the union of $\mathcal{G}$ and the set of all DAGs that can be reached by adding, deleting, or reversing an edge.
 
 The Metropolis-Hastings acceptance probability is thus
 \begin{equation}
-A(\mathcal{G}'|\mathcal{G}) = \min{\left(1,\frac{P(\mathbf{X}|\mathcal{G}')|\mathbf{Ne}(\mathcal{G}_t)|}{P(\mathbf{X}|\mathcal{G}_t)|\mathbf{Ne}(\mathcal{G}')|}\right)}
+A(\mathcal{G}'|\mathcal{G}) = \min{\left(1,\frac{P(\mathbf{X}|\mathcal{G}')|\mathbf{Ne}(\mathcal{G})|}{P(\mathbf{X}|\mathcal{G})|\mathbf{Ne}(\mathcal{G}')|}\right)}
 \end{equation}
 
 The sampler errors considered all affect the Metropolis-Hastings acceptance probability; specifically, they alter the calculation of $|\mathbf{Ne}(\mathcal{G})|$. In the first error, we count all \textit{graphs} that can be reached by modifying a single edge, regardless of whether the modification induces a cycle. In the second error, we double-count the DAGs that can be reached by reversing an edge. These errors are summarized in Table \ref{tab:ex3_errors}.
@@ -783,8 +782,8 @@ The sampler errors considered all affect the Metropolis-Hastings acceptance prob
     \begin{tabular}{l|c|c|c}
           Error & Components & Incorrect & Correct \\
          \hline
-         Cyclic Check & $|\mathbf{Ne}(\mathcal{G}_t)|, |\mathbf{Ne}(\mathcal{G}_t)'|$ & Count all graphs & Count all DAGs \\
-         Rev Count & $|\mathbf{Ne}(\mathcal{G}_t)|, |\mathbf{Ne}(\mathcal{G}_t)'|$ & Count edge reversals twice & Count reversals once \\
+         Cyclic Check & $|\mathbf{Ne}(\mathcal{G})|, |\mathbf{Ne}(\mathcal{G}')|$ & Count all graphs & Count all DAGs \\
+         Rev Count & $|\mathbf{Ne}(\mathcal{G})|, |\mathbf{Ne}(\mathcal{G}')|$ & Count edge reversals twice & Count reversals once \\
     \end{tabular}
     \caption{Experiment 3 intentional errors in posterior sampler}
     \label{tab:ex3_errors}
@@ -804,7 +803,7 @@ The $\chi^{2}$ test generally has the best detection rates, likely due to the fa
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{figures/graph_comparison.png}
-    \caption{Experiment 3 Type I/II error rates calculated over 100 trials with $\alpha=0.05$. Every 5 BC and SC samples were kept. The MMD tests used Gaussian kernels with median heuristic bandwidths on scale-normalized data. For the Rank test, we ordered test functions directly using a random tiebreak.}
+    \caption{Experiment 3 Type I/II error rates calculated over 100 trials with $\alpha=0.05$. Every $5^{\text{th}}$ sample from Algorithm \ref{alg:sc-sampler} was kept, and Algorithm \ref{alg:bc-sampler} set $M=5$. The MMD tests used Gaussian kernels with median heuristic bandwidths on scale-normalized data. For the Rank test, we ordered test functions directly using a random tiebreak.}
     \label{fig:ex3_comparison}
 \end{figure}
 
@@ -813,7 +812,7 @@ Another question we may ask is how much the use of a nonlinear kernel in the MMD
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{figures/graph_kernel.png}
-    \caption{Experiment 3 Type I/II error rates for MMD tests using linear/nonlinear kernels. Calculated over 100 trials with $\alpha=0.05$. Every 5 BC and SC samples were kept.}
+    \caption{Experiment 3 Type I/II error rates calculated over 100 trials with $\alpha=0.05$ for MMD tests using linear/nonlinear kernels. Every $5^{\text{th}}$ sample from Algorithm \ref{alg:sc-sampler} was kept, and Algorithm \ref{alg:bc-sampler} set $M=5$.}
     \label{fig:ex3_kernel}
 \end{figure}
 
@@ -821,7 +820,7 @@ It is important to emphasize that the tests as formulated are generally too expe
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{figures/graph_random_walk.png}
-    \caption{Experiment 3 Type I/II error rates for MMD tests using the GraKeL \cite{siglidis_grakel_2020} random walk kernel implementation, with $\lambda=0.1$ and `geometric' summation. Calculated over 100 trials with $\alpha=0.05$. Every 5 BC and SC samples were kept.}
+    \caption{Experiment 3 Type I/II error rates for MMD tests using the GraKeL \cite{siglidis_grakel_2020} random walk kernel implementation, with $\lambda=0.1$ and `geometric' summation. Calculated over 100 trials with $\alpha=0.05$. Every $5^{\text{th}}$ sample from Algorithm \ref{alg:sc-sampler} was kept, and Algorithm \ref{alg:bc-sampler} set $M=5$.}
     \label{fig:ex3_rw}
 \end{figure}
 
@@ -835,11 +834,11 @@ Naturally, the choice of kernel $k$ has a significant impact on the performance 
 
 We exploited the universality of the Gaussian kernel in experiment 3 by mapping graph structures to sets of binary features (test functions) in $\mathbb{R}^{d}$. By \cite{christmann_universal_2010}, Theorem 2.2, as long as this mapping is one-to-one, the Gaussian kernel is universal on the embedding. Many graph kernels take a similar approach, inducing an explicit feature vector and then applying a linear kernel. The fact that applying the Gaussian kernel improves test power in experiment 3 compared to the linear kernel, as shown in Figure \ref{fig:ex3_kernel}, implies that our features do not fully capture the underlying graph structures. This evokes similar results in the literature showing that using nonlinear decision boundaries on explicit feature vectors induced by graph kernels can improve performance \cite{kriege_survey_2020}. 
 
-The general disadvantage of the benchmark Geweke and Rank tests --- their reliance on inadequately expressive feature vectors (test functions) --- is exacerbated in experiment 3. Further, even these features, however lacking, are still challenging to deal with from both computational and statistical perspectives. In experiment 3 specifically, the number of features is quadratic in the number of nodes. In our case, with just over 30 features characterizing 3-node graphs, this is manageable. However, for even moderately-sized structures, just computing the feature vector for one sample becomes difficult. For example, 30-node graphs yield over 750,000 features. Even if it were feasible to compute the feature vectors for each sample, multiple testing corrections would significantly reduce test power. The $\chi^{2}$ test also does not scale well; the number of possible DAGs is exponential in the number of nodes. In contrast, the MMD tests scale well in this setting given the right choice of graph kernel. The trade-off is instead that it is difficult to prove that kernels are characteristic on graphs. As we saw in Figure \ref{fig:ex3_rw}, the random walk kernel in particular is unable to detect the Rev Count error, while the Gaussian kernel can.
+The general disadvantage of the benchmark Geweke and Rank tests --- their reliance on inadequately expressive feature vectors (test functions) --- is exacerbated in experiment 3. Further, these features, however lacking, are still challenging to deal with from both computational and statistical perspectives. In experiment 3 specifically, the number of features is quadratic in the number of nodes. In our case, with just over 30 features characterizing 3-node graphs, this is manageable. However, for even moderately-sized structures, just computing the feature vector for one sample becomes difficult. For example, 30-node graphs yield over 750,000 features. Even if it were feasible to compute the feature vectors for each sample, multiple testing corrections would significantly reduce test power. The $\chi^{2}$ test also does not scale well; the number of possible DAGs is exponential in the number of nodes. In contrast, the MMD tests scale well in this setting given the right choice of graph kernel. The trade-off is instead that it is difficult to prove that kernels are characteristic on graphs. As we saw in Figure \ref{fig:ex3_rw}, the random walk kernel in particular is unable to detect the Rev Count error, while the Gaussian kernel can.
 
 In $\mathbb{R}^{d}$, the MMD tests perform competitively compared to existing tests of the same class. However, they are much more expensive to conduct, with computational costs quadratic in the number of observations rather than linear or log-linear. In particular, the MMD-SC test exhibits better control of Type I error rates than the Geweke test, which also uses Algorithm \ref{alg:sc-sampler}, in experiments 1 and 2. However, as we can see in experiment 2, it is able to detect errors that the Geweke test cannot. On the other hand, in our experiments, the MMD-BC test does not have a clear performance advantage over other tests using Algorithm \ref{alg:bc-sampler}. As we might expect, the independent sample tests' Type I error rates are quite similar. However, the Type II error rates differ quite dramatically by experiment and by error. The MMD test outperforms the KS test in experiment 1, but not in experiment 2; it is outperformed by the Rank test in experiment 1 and in the Poisson error of experiment 2, but not in the transition error of experiment 2 and experiment 3. 
 
-The inconsistency in the MMD-BC test's performance relative to other tests in its class is puzzling, but one potential explanation is illustrated in the rightmost facet of Figure \ref{fig:ex1_aux}. Under the alternative hypothesis, assume a subset of test functions sufficiently captures some of the discrepancies between samples. In the Laplace error of experiment 1, this subset of test functions is $\{P(\mathbf{y}|\mathbf{\theta}), P(\mathbf{\theta})\}$. If we only use this subset of test functions for hypothesis testing, the MMD tests have the greatest power; for example, see the red lines in Figure \ref{fig:ex1_aux}. However, in practice, we do not know where the error will manifest ahead of time. The non-MMD tests lose power from testing features outside of the subset due to multiple testing corrections. As the number of features increases, MMD tests also lose power \cite{reddi_decreasing_2014} --- at a different rate. In the Laplace error in particular, comparing the red and blue lines in Figure \ref{fig:ex1_aux}, we see that the extent to which including `useless' test functions degrades power is much smaller for the KS and Rank tests compared to the MMD-BC test. This suggests that if the number of `useful' test functions is small relative to the total, then the MMD tests will perform poorly relative to existing tests. Of course, this has yet to be proven formally.
+The inconsistency in the MMD-BC test's Type II error rates relative to other tests based on Algorithm \ref{alg:bc-sampler} may be driven by differences in the effects of increasing dimensionality. This is illustrated in the rightmost facet of Figure \ref{fig:ex1_aux}. Under the alternative hypothesis, assume a subset of test functions sufficiently captures some of the discrepancies between samples such that the corresponding null hypotheses are rejected. In the Laplace error of experiment 1, this subset of test functions is $\{P(\mathbf{y}|\mathbf{\theta}), P(\mathbf{\theta})\}$. If we only use this subset of test functions for hypothesis testing, the MMD tests have the greatest power; for example, see the red lines in Figure \ref{fig:ex1_aux}. However, in practice, we do not know where the error will manifest ahead of time. The non-MMD tests lose power from testing features outside of the subset due to multiple testing corrections. As the number of features increases, MMD tests also lose power \cite{reddi_decreasing_2014} --- the curse of dimensionality. In the Laplace error in particular, comparing the red and blue lines in Figure \ref{fig:ex1_aux}, we see that the MMD-BC test loses power more quickly from increasing dimensionality than the KS and Rank tests. This suggests that if the number of rejecting test functions is small relative to the total, then the MMD tests will perform poorly relative to existing tests. 
 
 In addition to the implicit features encoded in the chosen kernel, as we saw in experiment 1, including hand-picked features in the MMD test can significantly improve detection rates. The features we chose were the likelihood and prior evaluated on the sample. In particular, these capture the relationship between the data and parameters much better than including the data as test functions directly in experiment 1. The likelihood and prior are especially good choices for test functions because their dimensionality is fixed, and do not significantly reduce the power of the tests if they prove irrelevant, even when the data are very high-dimensional.
 
@@ -861,7 +860,7 @@ The second direction is finer optimization of test parameters to maximize test p
 
 The third direction is further extension of the MCMC MMD tests to domains other than $\mathbb{R}^{d}$. One barrier to their out-of-the-box use in these settings is that the likelihood and prior test functions are in $\mathbb{R}^{d}$, while the parameters are not. While we could just ignore the likelihood and prior test functions, we ideally would like to exploit the information they contain. A potential solution would be to simply compute separate kernels for the auxiliary test functions and the parameters, then take their product.
 
-The final direction is generalizing our MCMC test frameworks to other methodologies. A straightforward extension is assessing approximate MCMC algorithms; for a review, see \cite{bardenet_markov_2015} section 6. Approximate MCMC algorithms, when the underlying dataset is large, achieve substantial speed gains over their exact counterparts by estimating acceptance ratio likelihood terms, reducing variance at the cost of introducing asymptotic bias. By simply swapping out the posterior sampler in Algorithms \ref{alg:mc-sampler}, \ref{alg:sc-sampler}, and \ref{alg:bc-sampler} for an approximate version, our tests can be used directly to evaluate the validity of the schemes. On the same note, we may also be able to apply these the two-sample approach to check approximate Bayesian computation (ABC) schemes.
+The final direction is generalizing our MCMC test frameworks to other methodologies. A straightforward extension is assessing approximate MCMC algorithms; for a review, see \cite{bardenet_markov_2015} section 6. Approximate MCMC algorithms, when the underlying dataset is large, achieve substantial speed gains over their exact counterparts by estimating acceptance ratio likelihood terms, reducing variance at the cost of introducing asymptotic bias. By simply swapping out the posterior sampler in Algorithms \ref{alg:mc-sampler}, \ref{alg:sc-sampler}, and \ref{alg:bc-sampler} for an approximate version, our tests can be used directly to evaluate the validity of the schemes. On the same note, we may also be able to apply these the two-sample approach to check approximate Bayesian computation (ABC) algorithms.
 
 \bibliographystyle{apalike}
 \bibliography{references}
