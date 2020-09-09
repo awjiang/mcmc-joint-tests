@@ -199,12 +199,10 @@ This section follows chapter 4 of \cite{steinwart_support_2008}.
 \end{definition}
 
 \begin{definition}[Kernel]
-    Let $\mathcal{X}$ be a non-empty set. A function $k: \mathcal{X} \times \mathcal{X} \rightarrow \mathbb{R}$ is a kernel if there exists a Hilbert space $\mathcal{H}$ of real-valued functions on $\mathcal{X}$ and a feature map $\phi: \mathcal{X} \rightarrow \mathcal{H}$ such that $$ k(x, x') = \langle \phi(x), \phi(x') \rangle_{\mathcal{H}} \quad \forall x, x' \in \mathcal{X} $$
+    Given a be a non-empty set $\mathcal{X}$, a function $k: \mathcal{X} \times \mathcal{X} \rightarrow \mathbb{R}$ is a kernel if there exists a Hilbert space $\mathcal{H}$ of real-valued functions on $\mathcal{X}$ and a feature map $\phi: \mathcal{X} \rightarrow \mathcal{H}$ such that $$ k(x, x') = \langle \phi(x), \phi(x') \rangle_{\mathcal{H}} \quad \forall x, x' \in \mathcal{X} $$
     Since $\phi(x) \in \mathcal{H}$ is a function, we may write $\phi(x)=k(\cdot, x)$. $k(\cdot, x)$ is called the canonical feature map.
 \end{definition}
-Sums and products of kernels are also kernels
-
-Two examples of commonly used kernels in $\mathbb{R}^{d}$ are the linear kernel
+Sums and products of kernels are also kernels. Two examples of commonly used kernels in $\mathbb{R}^{d}$ are the linear kernel
 \begin{equation}
     k_{\text{linear}}(\mathbf{x}, \mathbf{x}') = \langle \mathbf{x}, \mathbf{x}' \rangle
     \label{eq:linear_kernel}
@@ -305,7 +303,7 @@ where $z_{r} = \left[\left(\rho_{x}^{1 / 2} \Tilde{a}_{l}-\rho_{y}^{1 / 2} \Tild
 where $\{\lambda_{l}\}$ are the eigenvalues of the centered kernel $\Tilde{k}(x, x') = \langle \phi(x) - \mathbf{\mu}_{p}, \phi(x') - \mathbf{\mu}_{p} \rangle_{\mathcal{H}}$, $a_{l} \sim \mathcal{N}(0, 1)$ i.i.d., and $b_{l} \sim \mathcal{N}(0, 1)$ i.i.d. for all $l \in \mathbb{N}$.
 
 \subsubsection{Simulating the Null Distribution}
-In tests based on the limiting distributions in \ref{eq:mmd_biased_lim} and \ref{eq:mmd_unbiased_lim}, we calculate test thresholds for a given significance level $\alpha$ via bootstrap.
+In tests based on the limiting distributions under the null in \ref{eq:mmd_biased_lim} and \ref{eq:mmd_unbiased_lim}, we calculate test thresholds for a given significance level $\alpha$ via bootstrap.
 
 When the samples are i.i.d., we can apply the permutation bootstrap. We draw $N_{x}$ observations from the pooled data $\{x_{1}, x_{2}, \ldots, x_{N_{x}}, y_{1}, y_{2}, \ldots, y_{N_{y}} \}$ and call the sample $\Tilde{\mathbf{x}}$; the remaining $N_{y}$ observations we call $\Tilde{\mathbf{y}}$. Since $\Tilde{\mathbf{x}}$ and $\Tilde{\mathbf{y}}$ are drawn from the same distribution, when the number of samples is large, the resulting bootstrapped MMD is approximately distributed according to the limiting distribution under $H_{0}$. The unbiased bootstrapped MMD we will use is
 \begin{equation}
@@ -324,7 +322,7 @@ Let $\{Z_{t}, \mathcal{F}_{t}\}_{t \in \mathbb{N}}$ be a stationary sequence of 
 \end{equation}
 where $\tau(\mathcal{M}, X)=E\left(\sup _{g \in \Lambda}\left|\int g(t) P_{X \mid \mathcal{M}}(d t)-\int g(t) P_{X}(d t)\right|\right)$ and $\Lambda$ is the set of all one-Lipschitz continuous real-valued functions on the domain of X.
 \end{definition}
-In particular, Markov chains are $\tau$-mixing under certain assumptions (see \cite{chwialkowski_wild_2016} Appendix B and \cite{dedecker_new_2005})
+In particular, Markov chains are $\tau$-mixing under certain assumptions (see \cite{chwialkowski_wild_2016} appendix B and \cite{dedecker_new_2005})
 
 The type of time series required is called a wild bootstrap process
 \begin{definition}[Wild bootstrap process]
@@ -333,9 +331,9 @@ A wild bootstrap process $\mathbf{W} \in \mathbb{R}^{N \times N}$ or $\{W_{t, N}
     \item $\lim_{u\rightarrow\infty} \rho(u)=1$
     \item $\sum_{r=1}^{N-1} \rho(\frac{|r|}{l_{N}}) = O(l_{N})$
 \end{itemize}
-The sequence $\{l_{N}\}$ is taken such that $l_{N}=O(N)$ but $\lim_{N\rightarrow \infty}l_{N} = \infty$. $\{W_{t, N}\}_{1 \leq t \leq N}$ are $\tau$-dependent with coefficients $\tau(r) \leq C\zeta^{\frac{r}{l_{N}}}$ for $r \in \{1, \ldots, N\}, \zeta \in (0,1), C \in \mathbb{R}$.
+The sequence $\{l_{N}\}$ satisfies $l_{N}=O(N)$ and $\lim_{N\rightarrow \infty}l_{N} = \infty$. $\{W_{t, N}\}_{1 \leq t \leq N}$ are $\tau$-dependent with coefficients $\tau(r) \leq C\zeta^{\frac{r}{l_{N}}}$ for $r \in \{1, \ldots, N\}, \zeta \in (0,1), C \in \mathbb{R}$.
 \end{definition}
-Specifically, we will use the wild bootstrap process
+Specifically, we will use the wild bootstrap process from \cite{leucht_dependent_2013, chwialkowski_wild_2016}
 \begin{equation}
     W_{t, N}=\exp{\left(-\frac{1}{l_{N}}\right)} W_{t-1, N}+\sqrt{1-\exp{\left(-\frac{2}{l_{N}}\right)}} \epsilon_{t}
     \label{eq:wb_process}
@@ -791,25 +789,23 @@ The sampler errors considered all affect the Metropolis-Hastings acceptance prob
 
 We compare the MMD tests against the benchmark Geweke and Rank tests, with each test using the same set of manually engineered test functions (features) in a subset of $\mathbb{R}^{d}$. The MMD tests again use the Gaussian kernel with median heuristic bandwidth calculated on scale-normalized inputs. As a final benchmark, we include a $\chi^{2}$ test of the sample DAG frequencies. 
 
-Most of the features are derived from the adjacency matrix representation of the sampled graph structure $\mathcal{G}$, shown in Figure \ref{fig:ex3_dag}. As an initial set of features, we take
-take each entry $(i,j)$, each $\mathrm{AND}((i,j),(i',j'))$, and each $\mathrm{XOR}((i,j),(i',j'))$ for all $i,j,i',j'$. We then prune features that are constant by construction or exactly equal to other features. First, we remove features derived from duplicate pairs; for example, we keep only one of \{$\mathrm{AND}((i,j),(i',j'))=0$, $\mathrm{AND}((i',j'),(i,j))=0$\}. Next, diagonal entries $(i,i)=0$ are excluded (if they are nonzero, the graph is cyclic), along with all features derived from pairs with at least one diagonal entry. We also exclude $\mathrm{AND}((i,j),(j,i))=0$ and $\mathrm{XOR}((i,j),(i,j))=0$. Finally, we remove $\mathrm{AND}((i,j),(i,j)) = (i,j)$. As in the previous experiments, we also include the evaluation of the likelihood $P(\mathbf{Y}|\mathcal{G})$; the evaluation of the uniform prior $P(\mathcal{G})$ is omitted because it is constant.
+Most of the features are derived from the adjacency matrix representation of the sampled graph structure $\mathcal{G}$, shown in Figure \ref{fig:ex3_dag}. As an initial set of features, for all $i,j,i',j'$, we take
+take each entry $(i,j)$, each $\mathrm{AND}((i,j),(i',j'))$, and each $\mathrm{XOR}((i,j),(i',j'))$. We then prune features that are constant by construction or exactly equal to other features. First, we remove features derived from duplicate pairs; for example, we keep only one of \{$\mathrm{AND}((i,j),(i',j'))=0$, $\mathrm{AND}((i',j'),(i,j))=0$\}. Next, diagonal entries $(i,i)=0$ are excluded (if they are nonzero, the graph is cyclic), along with all features derived from pairs with at least one diagonal entry. We also exclude $\mathrm{AND}((i,j),(j,i))=0$ and $\mathrm{XOR}((i,j),(i,j))=0$. Finally, we remove $\mathrm{AND}((i,j),(i,j)) = (i,j)$. As in the previous experiments, we also include the evaluation of the likelihood $P(\mathbf{Y}|\mathcal{G})$; the evaluation of the uniform prior $P(\mathcal{G})$ is omitted because it is constant.
 
-The results are shown in Figure \ref{fig:ex3_comparison}. Type I error rates are approximately what we would expect from the design parameter $\alpha=0.05$.
-
-It is clear that the Rank test is inappropriate for this setting; it is unable to detect either error. For the other tests, the Cyclic Check error is much easier to detect than the Rev Count error. 
-
-The $\chi^{2}$ test generally has the best detection rates, likely due to the fact that it operates directly on the space of DAGs rather than an incomplete representation in $\mathbb{R}^{d}$. Surprisingly, however, the MMD-SC test comes quite close to matching its ability to detect the Cyclic Check error. In the Rev Count error, the SC tests slightly lead the MMD-BC test in performance and match the $\chi^{2}$ test. Finally, we see once more that the MMD-SC test has lower Type II error rates than the MMD-BC test.
-
-\begin{figure}[H]
+\begin{figure}
     \centering
     \includegraphics[width=\textwidth]{figures/graph_comparison.png}
     \caption{Experiment 3 Type I/II error rates calculated over 100 trials with $\alpha=0.05$. Every $5^{\text{th}}$ sample from Algorithm \ref{alg:sc-sampler} was kept, and Algorithm \ref{alg:bc-sampler} set $M=5$. The MMD tests used Gaussian kernels with median heuristic bandwidths on scale-normalized data. For the Rank test, we ordered test functions directly using a random tiebreak.}
     \label{fig:ex3_comparison}
 \end{figure}
 
+The results are shown in Figure \ref{fig:ex3_comparison}. Type I error rates are approximately what we would expect from the design parameter $\alpha=0.05$.
+
+It is clear that the Rank test is inappropriate for this setting; it is unable to detect either error. For the other tests, the Cyclic Check error is much easier to detect than the Rev Count error. The $\chi^{2}$ test generally has the best detection rates, likely due to the fact that it operates directly on the space of DAGs rather than an incomplete representation in $\mathbb{R}^{d}$. Surprisingly, however, the MMD-SC test comes quite close to matching its ability to detect the Cyclic Check error. In the Rev Count error, the SC tests slightly lead the MMD-BC test in performance and match the $\chi^{2}$ test. Finally, we see once more that the MMD-SC test has lower Type II error rates than the MMD-BC test.
+
 Another question we may ask is how much the use of a nonlinear kernel in the MMD tests buys us here, given that all but one of the features used are binary. Figure \ref{fig:ex3_kernel} suggests that the gains can be substantial. In the case of the Cyclic Check error, using the Gaussian kernel improves Type II by around 8\% across both tests. The effect on the Rev Count Type II error is unclear.
 
-\begin{figure}[H]
+\begin{figure}
     \centering
     \includegraphics[width=\textwidth]{figures/graph_kernel.png}
     \caption{Experiment 3 Type I/II error rates calculated over 100 trials with $\alpha=0.05$ for MMD tests using linear/nonlinear kernels. Every $5^{\text{th}}$ sample from Algorithm \ref{alg:sc-sampler} was kept, and Algorithm \ref{alg:bc-sampler} set $M=5$.}
@@ -817,6 +813,7 @@ Another question we may ask is how much the use of a nonlinear kernel in the MMD
 \end{figure}
 
 It is important to emphasize that the tests as formulated are generally too expensive to conduct in richer DAG spaces; see the section \ref{section:discussion} for more details. It is possible, however, to adapt the MMD tests to these settings by using graph kernels; see \cite{kriege_survey_2020} for a survey. As a proof of concept we ran this experiment using random walk kernels \cite{gartner_graph_2003}, \cite{vishwanathan_fast_2006} in Figure \ref{fig:ex3_rw}. The kernels did not include any of our auxiliary test functions; combining data from different domains is another issue entirely. Using the random walk kernel, the MMD tests are able to detect the Cyclic Check error better than the $\chi^{2}$ test; however, the Rev Count Type II error degrades. In fact, random walk kernels cannot distinguish between isomorphic graphs. This illustrates a central issue with MMD; if a characteristic kernel is unavailable, MMD is not a metric on the space of probability distributions, and we will be unable to detect some differences between distributions.
+
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{figures/graph_random_walk.png}
@@ -834,7 +831,7 @@ Naturally, the choice of kernel $k$ has a significant impact on the performance 
 
 We exploited the universality of the Gaussian kernel in experiment 3 by mapping graph structures to sets of binary features (test functions) in $\mathbb{R}^{d}$. By \cite{christmann_universal_2010}, Theorem 2.2, as long as this mapping is one-to-one, the Gaussian kernel is universal on the embedding. Many graph kernels take a similar approach, inducing an explicit feature vector and then applying a linear kernel. The fact that applying the Gaussian kernel improves test power in experiment 3 compared to the linear kernel, as shown in Figure \ref{fig:ex3_kernel}, implies that our features do not fully capture the underlying graph structures. This evokes similar results in the literature showing that using nonlinear decision boundaries on explicit feature vectors induced by graph kernels can improve performance \cite{kriege_survey_2020}. 
 
-The general disadvantage of the benchmark Geweke and Rank tests --- their reliance on inadequately expressive feature vectors (test functions) --- is exacerbated in experiment 3. Further, these features, however lacking, are still challenging to deal with from both computational and statistical perspectives. In experiment 3 specifically, the number of features is quadratic in the number of nodes. In our case, with just over 30 features characterizing 3-node graphs, this is manageable. However, for even moderately-sized structures, just computing the feature vector for one sample becomes difficult. For example, 30-node graphs yield over 750,000 features. Even if it were feasible to compute the feature vectors for each sample, multiple testing corrections would significantly reduce test power. The $\chi^{2}$ test also does not scale well; the number of possible DAGs is exponential in the number of nodes. In contrast, the MMD tests scale well in this setting given the right choice of graph kernel. The trade-off is instead that it is difficult to prove that kernels are characteristic on graphs. As we saw in Figure \ref{fig:ex3_rw}, the random walk kernel in particular is unable to detect the Rev Count error, while the Gaussian kernel can.
+The general disadvantage of the benchmark Geweke and Rank tests --- their reliance on inadequately expressive feature vectors (test functions) --- is exacerbated in experiment 3. Further, these features, however lacking, are still challenging to deal with from both computational and statistical perspectives. In experiment 3 specifically, the number of features is quadratic in the number of nodes. In our case, with just over 30 features characterizing 3-node graphs, this is manageable. However, for even moderately-sized structures, just computing the feature vector for one sample becomes difficult. For example, 30-node graphs yield over 750,000 features. Even if it were feasible to compute the feature vectors for each sample, multiple testing corrections would significantly reduce test power. The $\chi^{2}$ test also does not scale well; the number of possible DAGs is exponential in the number of nodes. In contrast, the MMD tests easily scale in this setting given the right choice of graph kernel. The trade-off is instead that it is difficult to prove that kernels are characteristic on graphs. As we saw in Figure \ref{fig:ex3_rw}, the random walk kernel in particular is unable to detect the Rev Count error, while the Gaussian kernel can.
 
 In $\mathbb{R}^{d}$, the MMD tests perform competitively compared to existing tests of the same class. However, they are much more expensive to conduct, with computational costs quadratic in the number of observations rather than linear or log-linear. In particular, the MMD-SC test exhibits better control of Type I error rates than the Geweke test, which also uses Algorithm \ref{alg:sc-sampler}, in experiments 1 and 2. However, as we can see in experiment 2, it is able to detect errors that the Geweke test cannot. On the other hand, in our experiments, the MMD-BC test does not have a clear performance advantage over other tests using Algorithm \ref{alg:bc-sampler}. As we might expect, the independent sample tests' Type I error rates are quite similar. However, the Type II error rates differ quite dramatically by experiment and by error. The MMD test outperforms the KS test in experiment 1, but not in experiment 2; it is outperformed by the Rank test in experiment 1 and in the Poisson error of experiment 2, but not in the transition error of experiment 2 and experiment 3. 
 
