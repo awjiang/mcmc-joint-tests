@@ -7,19 +7,19 @@ import os
 import pickle
 from time import perf_counter
 
-''' 
-Split `num_iter` iterations into `nproc` chunks for multithreading
-'''
 def splitIter(num_iter, nproc):
+    ''' 
+    Split `num_iter` iterations into `nproc` chunks for multithreading
+    '''
     arr_iter = (onp.zeros(nproc) + num_iter // nproc).astype('int')
     for i in range(num_iter % nproc):
         arr_iter[i] += 1
     return arr_iter
 
-'''
-Normalize sample scale
-'''
 def normalizeTwoSamples(X, Y):
+    '''
+    Normalize feature scales of two samples `X` and `Y` by dividing by the pooled standard deviations of the features
+    '''
     assert len(X.shape) == 2 and len(Y.shape) == 2
     assert X.shape[1] == Y.shape[1]
     XY = onp.vstack([X, Y])
@@ -36,6 +36,10 @@ def normalizeTwoSamples(X, Y):
 
 class kernel(object):
     def __init__(self, X, Y):
+        '''
+        Generic kernel class
+        `X`, `Y` are (n_x x p) and (n_y x p) samples
+        '''
         self._X = X
         self._Y = Y
         pass
@@ -48,21 +52,30 @@ class kernel(object):
         pass
     
     def learn(self):
+        '''
+        Learn kernel parameters
+        '''
         pass
     
     def eval(self):
+        '''
+        Generate kernel matrix K from samples X and Y with K_(i, j) = k(x_i, y_j)
+        '''
         pass
 
     def f_kernel(self):
+        '''
+        Kernel function k(x, y)
+        '''
         pass
 
-''' 
-Generate RBF kernel matrix with width `tau`. 
-If `tau` is None, will use the median heuristic.
-Each row corresponds to an observation (row) from X; each column corresponds to an observation (row) from Y.
-'''
 class rbf_kernel(kernel):
     def __init__(self, X, Y, tau=None, **kwargs):
+        ''' 
+        RBF kernel class; k(x, y) = exp(-(||x-y||^2)/tau)
+        `X`, `Y` are (n_x x p) and (n_y x p) samples
+        If bandwidth `tau` is None, uses the median heuristic
+        '''
         assert X.shape[1] == Y.shape[1]
         assert len(X.shape) == 2 and len(X.shape) == len(Y.shape)
         if tau is not None:
@@ -81,10 +94,14 @@ class rbf_kernel(kernel):
         pass
 
     def learn(self, method='median_heuristic', eval=False):
+        '''
+        Learn kernel parameters
+        '''
         assert method in ['median_heuristic']
         n_X, p = self._X.shape
         n_Y = self._Y.shape[0]
         if method == 'median_heuristic':
+            # Pool the samples if not already pooled
             if onp.allclose(self._X, self._Y):
                 X = self._X
                 Y = self._Y
@@ -104,7 +121,7 @@ class rbf_kernel(kernel):
 
         if eval == True:
             if n_X != n: 
-                # if we pooled the data, unpool here
+                # If we pooled the samples, unpool here
                 return onp.exp(-norm2[:, :n_X][n_X:, :]/self._tau)
             else:
                 return onp.exp(-norm2/self._tau)
@@ -112,6 +129,9 @@ class rbf_kernel(kernel):
             pass
 
     def eval(self):
+        '''
+        Generate kernel matrix K from samples X and Y with K_(i, j) = exp(-(||x_i-y_j||^2)/tau)
+        '''
         if self._tau is None:
             K = self.learn(eval=True)
         else:
@@ -121,16 +141,19 @@ class rbf_kernel(kernel):
         return K
 
     def f_kernel(self, x, y, tau=None):
+        '''
+        Kernel function k(x, y) = exp(-(||x-y||^2)/tau)
+        '''
         if tau is None:
             tau = self._tau
         assert len(x.shape) == len(y.shape) and len(x.shape) == 1
         return onp.exp(-((x-y)**2).sum()/tau)
       
-''' 
-Generate linear kernel matrix. 
-Each row corresponds to an observation (row) from X; each column corresponds to an observation (row) from Y.
-'''
 class linear_kernel(kernel):
+    '''
+    Linear kernel class; k(x, y) = <x, y>
+    `X`, `Y` are (n_x x p) and (n_y x p) samples
+    '''
     def __init__(self, X, Y, **kwargs):
         assert X.shape[1] == Y.shape[1]
         assert len(X.shape) == 2 and len(X.shape) == len(Y.shape)
@@ -146,33 +169,41 @@ class linear_kernel(kernel):
         pass
 
     def learn(self, eval=False):
+        '''
+        Learn kernel parameters
+        '''
         if eval == True:
             return self.eval()
         else:
             pass
 
     def eval(self):
+        ''' 
+        Generate kernel matrix K from samples X and Y with K_(i, j) = <x_i, y_j>
+        '''
         n_X, p = self._X.shape
         n_Y = self._Y.shape[0]
         K = (self._X.reshape(n_X, 1, p) * self._Y.reshape(1, n_Y, p)).sum(2)
         return K
 
-    def f_kernel(self, x, y, tau=None):
-        if tau is None:
-            tau = self._tau
+    def f_kernel(self, x, y):
+        '''
+        Kernel function k(x, y) = <x, y>
+        '''
         assert len(x.shape) == len(y.shape) and len(x.shape) == 1
         return onp.dot(x, y)
       
-'''
-Sum of kernels
-`lst_classes` = list of classes used for each kernel
-`lst_groups` = list of sample indices used for each kernel
-`lst_weights` = list of sum weights used for each kernel
-`lst_params` = list of parameters used for each kernel and set via the `set_params` class method
-`lst_kwargs` = list of **kwargs to pass to each kernel
-'''
 class sum_kernel(kernel):
     def __init__(self, X, Y, lst_classes, lst_groups, lst_weights=None, lst_params=None, lst_kwargs=None, **kwargs):
+        '''
+        Sum of kernels
+        `X`, `Y` are (n_x x p) and (n_y x p) samples
+        `lst_classes` = list of classes used for each kernel
+        `lst_groups` = list of sample indices used for each kernel
+        `lst_weights` = list of sum weights used for each kernel
+        `lst_params` = list of parameters used for each kernel and set via the `set_params` class method
+        `lst_kwargs` = list of **kwargs to pass to each kernel
+        '''
         assert X.shape[1] == Y.shape[1]
         assert len(X.shape) == 2 and len(X.shape) == len(Y.shape)
         if lst_weights is None:
@@ -244,6 +275,15 @@ class sum_kernel(kernel):
 
 class prod_kernel(kernel):
     def __init__(self, X, Y, lst_classes, lst_groups, lst_params=None, lst_kwargs=None, **kwargs):
+        '''
+        Product of kernels
+        `X`, `Y` are (n_x x p) and (n_y x p) samples
+        `lst_classes` = list of classes used for each kernel
+        `lst_groups` = list of sample indices used for each kernel
+        `lst_weights` = list of sum weights used for each kernel
+        `lst_params` = list of parameters used for each kernel and set via the `set_params` class method
+        `lst_kwargs` = list of **kwargs to pass to each kernel
+        '''
         assert X.shape[1] == Y.shape[1]
         assert len(X.shape) == 2 and len(X.shape) == len(Y.shape)
         if lst_kwargs is None:
@@ -274,7 +314,11 @@ class prod_kernel(kernel):
             K = onp.ones(shape=[n_X, n_Y])
         
         for i in range(self._num_kernels):
-            self._lst_kernels[i] = self._lst_classes[i](self._X[:, self._lst_groups[i]].reshape(-1, len(self._lst_groups[i])), self._Y[:, self._lst_groups[i]].reshape(-1, len(self._lst_groups[i])), **self._lst_kwargs[i])
+            self._lst_kernels[i] = self._lst_classes[i](
+              self._X[:, self._lst_groups[i]].reshape(-1, len(self._lst_groups[i])), 
+              self._Y[:, self._lst_groups[i]].reshape(-1, len(self._lst_groups[i])), 
+              **self._lst_kwargs[i]
+            )
             if eval==True:
                 K_i = self._lst_kernels[i].learn(eval=True)
                 K *= K_i
@@ -312,11 +356,10 @@ class prod_kernel(kernel):
 #######################################################################
 ############################# Geweke test #############################
 #######################################################################
-
-# '''
-# Calculate the squared standard error of the estimate of E[`g`] (Geweke 1999, 3.7-8).
-# '''
 # def geweke_se2(g, L=0, center=True):
+#     '''
+#     Calculate the squared standard error of the estimate of E[`g`] (Geweke 1999, 3.7-8).
+#     '''
 #     L = int(L)
 #     M = g.shape[0]
 #     if center==True:
@@ -332,10 +375,10 @@ class prod_kernel(kernel):
 #     v = (v + 2*v_L)/M
 #     return v
 
-# '''
-# Calculate the biased `s`-lag autocovariance of *centered* samples `g`
-# '''
 # def geweke_c(g, s):
+#     '''
+#     Calculate the biased `s`-lag autocovariance of *centered* samples `g`
+#     '''
 #     if s == 0:
 #         out = (g ** 2).mean(axis=0)
 #     else:
@@ -343,11 +386,11 @@ class prod_kernel(kernel):
 #         out = ((g[s:, :]) * (g[:(M-s), :])).sum(0)/float(M)  # biased
 #     return out
 
-'''
-Calculate the squared standard error of the estimate of E[`g`] (Geweke 1999, 3.7-8). If `L`=None, automatically selects bandwidth for the lag window based on an asymptotic MSE criterion (Andrews 1991). This assumes that `g` is fourth-moment stationary and the autocovariances are L1-summable.
-Note: depends on arch
-'''
 def geweke_se2(g, L=None, force_int_L=False):
+    '''
+    Calculate the squared standard error of the estimate of E[`g`] (Geweke 1999, 3.7-8); depends on arch.
+    If `L`=None, automatically selects bandwidth for the lag window based on an asymptotic MSE criterion (Andrews 1991). This assumes that `g` is fourth-moment stationary and the autocovariances are L1-summable
+    '''
     if len(g.shape) == 1:
         g = g.reshape(-1, 1)
     M = g.shape[0]
@@ -360,16 +403,17 @@ def geweke_se2(g, L=None, force_int_L=False):
     v /= M
     return v
 
-'''
-Run Geweke test (Geweke 2004) on marginal-conditional and successive-conditional test function arrays `g_mc` and `g_sc`, each row corresponding to a sample.
-Uses a maximum window size of `l`*M to estimate of the squared standard error of E[g_sc], where M is the number of SC samples.
-Example values of `l` are 0.04, 0.08, 0.15. `l`=None for automatic lag window bandwidth selection (Andrews 1991).
-`test_correction` corrects for multiple testing if not set to `test_correction=None`; set to 'b' (for Bonferroni) or 'bh' (for Benjamini-Hochberg) are supported
-'''
 def geweke_test(g_mc, g_sc, alpha=0.05, l=None, test_correction='bh'):
-    if test_correction is not None:
-        assert test_correction in ['b', 'bh']
-        num_tests = g_mc.shape[1]
+    '''
+    Run Geweke test (Geweke 2004) on marginal-conditional and successive-conditional test function arrays `g_mc` and `g_sc`, each row corresponding to a sample
+    Uses a maximum window size of `l`*M to estimate of the squared standard error of E[g_sc], where M is the number of successive-conditional samples
+    Example values of `l` are 0.04, 0.08, 0.15. `l`=None for automatic lag window bandwidth selection (Andrews 1991)
+    `test_correction` corrects for multiple testing if set to 'b' (for Bonferroni) or 'bh' (for Benjamini-Hochberg)
+    '''
+    
+    assert test_correction in ['b', 'bh']
+    num_tests = g_mc.shape[1]
+    
     if len(g_mc.shape) == 1 or len(g_sc.shape) == 1:
         g_mc = g_mc.reshape(-1, 1)
         g_sc = g_sc.reshape(-1, 1)
@@ -404,16 +448,13 @@ def geweke_test(g_mc, g_sc, alpha=0.05, l=None, test_correction='bh'):
         else:
           rank_max = 0
         result = rank <= rank_max
-    else:
-        threshold = scipy.stats.norm.ppf(1.-alpha/(2.)) # asymptotic
-        result = p_value <= alpha
     
     return {'result': result, 'p_value': p_value, 'test_statistic': test_statistic, 'critical_value': threshold, 'test_correction': test_correction}
 
-'''
-Generate Geweke P-P plot (Grosse and Duvenaud 2014) for sample vectors x, y. Can also generate Q-Q plots.
-'''
 def prob_plot(x, y, plot_type='PP', step = 0.005):
+    '''
+    Generate Geweke P-P plot (Grosse and Duvenaud 2014) for sample vectors x, y. Can also generate Q-Q plots.
+    '''
     assert plot_type in ['PP', 'QQ']
     x = onp.sort(x)
     y = onp.sort(y)
@@ -438,10 +479,10 @@ def prob_plot(x, y, plot_type='PP', step = 0.005):
 ############################## MMD test ###############################
 #######################################################################
 
-'''
-Quadratic/Linear time MMD test. No shogun dependency
-'''
 def mmd_test(X, Y, kernel=rbf_kernel, alpha=0.05, null_samples=100, kernel_learn_method=None, mmd_type='unbiased', rng=None, X_train=None, Y_train=None, **kwargs):
+    '''
+    Quadratic/Linear time MMD test
+    '''
     assert X.shape[1] == Y.shape[1] and len(X.shape) == 2 and len(Y.shape) == 2
     assert mmd_type in ['biased', 'unbiased', 'linear']
     assert kernel_learn_method is None or kernel_learn_method in ['median_heuristic']
@@ -510,10 +551,10 @@ def mmd_test(X, Y, kernel=rbf_kernel, alpha=0.05, null_samples=100, kernel_learn
     
     return {'result':result, 'p_value':p_value, 'test_statistic':test_statistic, 'critical_value':threshold, 'kernel_param':K.params}
 
-'''
-Generate (squared) Quadratic Time MMD u-statistic
-'''
 def mmd_u(K_XX, K_YY, K_XY, normalize=True):
+    '''
+    Generate (squared) Quadratic Time MMD u-statistic from kernel matrices
+    '''
     assert K_XY.shape[0] == K_XY.shape[1]
     m, n = K_XY.shape
     if normalize == True:
@@ -525,10 +566,10 @@ def mmd_u(K_XX, K_YY, K_XY, normalize=True):
         z = 1.
     return z*(1./(m*(m-1)) * (K_XX.sum() - onp.diag(K_XX).sum()) + 1./(n*(n-1)) * (K_YY.sum() - onp.diag(K_YY).sum()) - 2.*K_XY.mean())
 
-'''
-Generate (squared) Linear Time MMD u-statistic
-'''
 def mmd_l(X, Y, f_kernel, return_2nd_moment=False):
+    '''
+    Generate (squared) Linear Time MMD u-statistic from samples `X` and `Y` given kernel function `f_kernel`
+    '''
     assert X.shape == Y.shape
     n, p = X.shape
 
@@ -553,10 +594,10 @@ def mmd_l(X, Y, f_kernel, return_2nd_moment=False):
 ############################ Wild MMD test ############################
 #######################################################################
 
-'''
-Generate `k` wild bootstrap processes of length `n` for the Wild MMD test. Returns an (n x k) matrix.
-'''
 def wb_process(n, k=1, l_n=20, center=False, rng=None):
+    '''
+    Generate `k` wild bootstrap processes of length `n` for the Wild MMD test. Returns an (n x k) matrix
+    '''
     if rng is None:
         rng = onp.random.default_rng()
     epsilon = rng.normal(size=(n, k))
@@ -569,10 +610,11 @@ def wb_process(n, k=1, l_n=20, center=False, rng=None):
         W -= W.mean(0).reshape(1, k)
     return W
 
-'''
-Generate wild bootstrapped MMD v-statistic for the Wild MMD test
-'''
 def mmd_wb(K_XX, K_YY, K_XY, normalize=True, wb_l_n=20, wb_center=False, rng=None):
+    '''
+    Generate wild bootstrapped MMD v-statistic for the Wild MMD test using kernel matrices
+    `normalize`=True will return the normalized bootstrapped statistics
+    '''
     if rng is None:
         rng = onp.random.default_rng()
     n_X, n_Y = K_XY.shape
@@ -589,10 +631,11 @@ def mmd_wb(K_XX, K_YY, K_XY, normalize=True, wb_l_n=20, wb_center=False, rng=Non
             z = n_X * n_Y / (n_X + n_Y)
         return z*(1./n_X**2 * w_X.T @ K_XX @ w_X + 1./n_Y**2 * w_Y.T @ K_YY @ w_Y - 2./(n_X*n_Y) * w_X.T @ K_XY @ w_Y) 
 
-'''
-Generate (squared) MMD v-statistic for the Wild MMD test
-'''
 def mmd_v(K_XX, K_YY, K_XY, normalize=True):
+    '''
+    Generate (squared) MMD v-statistic for the Wild MMD test
+    `normalize`=True will return the normalized statistic
+    '''
     n_X, n_Y = K_XY.shape
     z = 1.
     if n_X == n_Y:
@@ -603,10 +646,10 @@ def mmd_v(K_XX, K_YY, K_XY, normalize=True):
             z = n_X * n_Y / (n_X + n_Y)
     return z*(K_XX.mean() + K_YY.mean() - 2.*K_XY.mean())
 
-'''
-Run Wild MMD test on samples with shape (n x p)
-'''
 def mmd_wb_test(X, Y, kernel=rbf_kernel, alpha=0.05, null_samples=100, kernel_learn_method=None, wb_l_n=20, wb_center=False, rng=None, **kwargs):
+    '''
+    Run Wild MMD test on samples with shape (n x p)
+    '''
     if len(X.shape) == 1:
         X = X.reshape(X.shape[0], 1)
     if len(Y.shape) == 1:
@@ -646,10 +689,10 @@ def mmd_wb_test(X, Y, kernel=rbf_kernel, alpha=0.05, null_samples=100, kernel_le
     
     return {'result':result, 'p_value':p_value, 'test_statistic':test_statistic, 'critical_value':threshold, 'kernel_param':K.params}
 
-'''
-Estimate MMD variance. From Sutherland et al. 2016
-'''
 def mmd_var(K_XX, K_XY, K_YY):
+    '''
+    Estimate MMD variance. From Sutherland et al. 2016
+    '''
     m = K_XX.shape[0]
 
     diag_X = onp.diag(K_XX)
@@ -697,12 +740,16 @@ def mmd_var(K_XX, K_XY, K_YY):
 #######################################################################
 
 def ks_test(X, Y, alpha=0.05, test_correction='bh'):
+    '''
+    Exact two-sample Kolmogorov-Smirnov test from Gandy and Scott 2020
+    `test_correction` corrects for multiple testing if set to 'b' (for Bonferroni) or 'bh' (for Benjamini-Hochberg)
+    '''
     assert len(X.shape) == 2
     assert len(Y.shape) == 2
     assert X.shape[1] == Y.shape[1]
-    if test_correction is not None:
-        assert test_correction in ['b', 'bh']
-        num_tests = X.shape[1]
+    
+    assert test_correction in ['b', 'bh']
+    num_tests = X.shape[1]
     
     p_value = onp.array([scipy.stats.ks_2samp(X[:, j], Y[:, j]).pvalue for j in range(X.shape[1])])
     
@@ -720,13 +767,13 @@ def ks_test(X, Y, alpha=0.05, test_correction='bh'):
         else:
           rank_max = 0
         result = rank <= rank_max
-    else:
-        threshold = scipy.stats.norm.ppf(1.-alpha/(2.)) # asymptotic
-        result = p_value <= alpha
     
     return {'result': result, 'p_value': p_value}
 
 def rank_stat(model, L, test_functions=None, rng=None):
+    '''
+    Generate Rank statistic from Gandy and Scott 2020 using a chain of length `L` sampled from `model`
+    '''
     if test_functions is None:
         test_functions = model.test_functions
     if rng is None:
@@ -755,12 +802,13 @@ def rank_stat(model, L, test_functions=None, rng=None):
     chain = test_functions(chain)
     return scipy.stats.rankdata(chain, 'ordinal', axis = 0)[M, :]
 
-'''
-Rank test from Gandy and Scott 2020.
-N = number of rank statistics to compute
-L = length of each chain
-''' 
 def rank_test(model, N, L, alpha=0.05, test_functions=None, test_correction='bh', rng=None):
+    '''
+    Rank test from Gandy and Scott 2020
+    `N` = number of Rank statistics to compute
+    `L` = length of each Rank statistic's chain
+    `test_correction` corrects for multiple testing if set to 'b' (for Bonferroni) or 'bh' (for Benjamini-Hochberg)
+    ''' 
     if rng is None:
         rng = model._rng_s
     if test_functions is None:
@@ -774,7 +822,7 @@ def rank_test(model, N, L, alpha=0.05, test_functions=None, test_correction='bh'
 
     num_tests = ranks.shape[1]
     if test_correction == 'b':
-        result = (p_value <= alpha/num_tests) # Bonferroni correction  
+        result = (p_value <= alpha/num_tests)
     elif test_correction == 'bh':
         rank_bh = onp.empty_like(p_value)
         rank_bh[onp.argsort(p_value)] = onp.arange(1, len(p_value)+1)
@@ -784,18 +832,19 @@ def rank_test(model, N, L, alpha=0.05, test_functions=None, test_correction='bh'
         else:
             rank_bh_max = 0
         result = rank_bh <= rank_bh_max        
-    else:
-        result = p_value <= alpha
       
     return {'result': result, 'p_value': p_value}  
 
-# Sequential wrapper
 def f_test_sequential(sample_size, model, test_type, **kwargs):
-    assert test_type in ['rank', 'ks', 'mmd', 'mmd_sum_uni', 'mmd-wb', 'geweke']
+    '''
+    Helper function for the sequential test from Gandy and Scott 2020
+    Returns p-values from a `test_type` test using samples generated from `model`
+    '''
+    assert test_type in ['rank', 'ks', 'mmd', 'mmd-wb', 'geweke']
         
     if test_type == 'rank':
         p_values = rank_test(model, N=500, L=5)['p_value']
-    elif test_type in ['ks', 'mmd', 'mmd_sum_uni']:
+    elif test_type in ['ks', 'mmd']:
         X = model.test_functions(model.sample_mc(sample_size))
         Y = model.test_functions(model.sample_bc(sample_size, burn_in_samples=5))
         if test_type == 'ks':
@@ -805,18 +854,21 @@ def f_test_sequential(sample_size, model, test_type, **kwargs):
     elif test_type in ['mmd-wb', 'geweke']:
         if test_type == 'mmd-wb':
             mmd_test_size = int(sample_size)
-            mmd_thinning = onp.arange(0, int(sample_size), 1) #int(sample_size/mmd_test_size)
+            mmd_thinning = onp.arange(0, int(sample_size), 5)
             X = model.test_functions(model.sample_mc(mmd_test_size))
             Y = model.test_functions(model.sample_sc(sample_size))
             p_values = mmd_wb_test(X, Y[mmd_thinning, :])['p_value']
         elif test_type == 'geweke':
-            geweke_thinning = onp.arange(0, int(sample_size), 1)
+            geweke_thinning = onp.arange(0, int(sample_size), 5)
             X = model.test_functions(model.sample_mc(sample_size))
             Y = model.test_functions(model.sample_sc(sample_size))
-            p_values = geweke_test(X, Y[geweke_thinning, :], l=0.15, test_correction='b')['p_value']        
+            p_values = geweke_test(X, Y[geweke_thinning, :], l=0.08, test_correction='b')['p_value']        
     return p_values
     
 def sequential_test(f_test, n, alpha, k, Delta):
+    '''
+    Sequential wrapper from Gandy and Scott 2020
+    '''  
     beta = alpha/k
     gamma = beta**(1/k)
 
