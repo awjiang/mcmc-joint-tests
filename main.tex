@@ -251,7 +251,7 @@ The empirical estimate of the mean embedding is
 \subsection{Maximum Mean Discrepancy (MMD)}
 This section follows \cite{gretton_kernel_2012}. The workhorse of the tests we will present later is 
 \begin{definition}[Maximum Mean Discrepancy (MMD)]
-Let $\mathcal{F}$ be a space of functions $f:\mathcal{X}\rightarrow \mathbb{R}$, where $\mathcal{X}$ is a non-empty set. Then the Maximum Mean Discrepancy (MMD) is defined as the integral probability metric
+Let $\mathcal{F}$ be a space of functions $f:\mathcal{X}\rightarrow \mathbb{R}$, where $\mathcal{X}$ is a non-empty set. Then the Maximum Mean Discrepancy (MMD) is defined as 
     \begin{equation}
         \mathrm{MMD}[\mathcal{F}, P, Q]=\sup _{f \in \mathcal{F}}\left(\mathbf{E}_{X}[f(X)]-\mathbf{E}_{Y}[f(Y)]\right)
     \label{eq:mmd}
@@ -712,7 +712,7 @@ The Type I error rates of the BC tests hover around the design parameter of $\al
 
 For the two-sample tests, the Transition error is much easier to detect than the Poisson error, while the opposite is true for the Rank test.  Notably, while the Geweke test detects the Transition error quite easily, it essentially is unable to detect the Poisson error at the computation levels shown. In contrast, the other tests perform reasonably well, with Type II error rates that fall relatively quickly with sample size. 
 
-Across both errors, we see that the MMD-SC test has lower Type II error rates than the MMD-BC test --- further evidence of the error magnification properties of Algorithm \ref{alg:sc-sampler}. The MMD-SC test most efficiently detects the Transition error, but lags behind the KS and Rank tests in detecting the Poisson error. The performance of the KS and Rank tests are quite consitent across both errors, with the KS test detecting the errors especially efficiently. This implies that the test functions accurately capture some of the discrepancies between samples.
+Across both errors, we see that the MMD-SC test has lower Type II error rates than the MMD-BC test --- further evidence of the error magnification properties of Algorithm \ref{alg:sc-sampler}. The MMD-SC test most efficiently detects the Transition error, but lags behind the KS and Rank tests in detecting the Poisson error. The performance of the KS and Rank tests are quite consistent across both errors, with the KS test detecting the errors especially efficiently. This implies that the test functions accurately capture some of the discrepancies between samples.
 
 \begin{figure}[H]
     \centering

@@ -132,51 +132,21 @@ There are a handful of MCMC correctness tests in the literature; in fact, the er
 Let us fix notation. Probability distributions and random variables are always denoted by uppercase unbolded letters (X). In $\mathbb{R}^{d}$, unbolded lowercase symbols (x) denote scalars, bolded lowercase symbols ($\mathbf{x}$) denote vectors, and bolded uppercase symbols ($\mathbf{X}$) denote matrices. In other domains, unbolded symbols (x) are used generically to refer to constituent elements.
 
 \section{BACKGROUND}
-Following \cite{steinwart_support_2008} chapter 4 and \cite{gretton_kernel_2012}, we review key concepts from the kernel methods literature that undergird our approach.
+We review some results from the kernel methods literature following \cite{steinwart_support_2008} chapter 4 and \cite{gretton_kernel_2012}.
 
-\begin{definition}[Hilbert Space]
-    A vector space $\mathcal{H}$ over $\mathbb{R}$ is called a Hilbert Space if there exists a function $\langle \cdot, \cdot \rangle: \mathcal{H} \times \mathcal{H} \rightarrow \mathbb{R} $ satisfying $\forall f, f_{1}, f_{2},  g \in \mathcal{H}$
-    \begin{enumerate}
-        \item $\langle\alpha_{1} f_{1}+\alpha_{2} f_{2}, g\rangle_{\mathcal{H}}=\alpha_{1}\langle f_{1}, g\rangle_{\mathcal{H}}+\alpha_{2}\langle f_{2}, g\rangle_{\mathcal{H}}$ 
-        \item $\langle f, g\rangle_{\mathcal{H}}=\langle g, f\rangle_{\mathcal{H}}$
-        \item $\langle f, f\rangle_{\mathcal{H}} \geq 0$ and $\langle f, f\rangle_{\mathcal{H}}=0$ iff $f=0$
-    \end{enumerate}
-     $\langle \cdot, \cdot \rangle$ is called an inner product.
-    \label{def:hilbert_space}
+\begin{definition}[Maximum Mean Discrepancy (MMD)]
+Let $\mathcal{F}$ be a space of functions $f:\mathcal{X}\rightarrow \mathbb{R}$, where $\mathcal{X}$ is a non-empty set. Then the Maximum Mean Discrepancy (MMD) is defined as
+    \begin{equation}
+        \mathrm{MMD}[\mathcal{F}, P, Q]=\sup _{f \in \mathcal{F}}\left(\mathbf{E}_{X}[f(X)]-\mathbf{E}_{Y}[f(Y)]\right)
+    \label{eq:mmd}
+    \end{equation}
 \end{definition}
-
-\begin{definition}[Kernel]
-    Given a be a non-empty set $\mathcal{X}$, a function $k: \mathcal{X} \times \mathcal{X} \rightarrow \mathbb{R}$ is a kernel if there exists a Hilbert space $\mathcal{H}$ of real-valued functions on $\mathcal{X}$ and a feature map $\phi: \mathcal{X} \rightarrow \mathcal{H}$ such that $$ k(x, x') = \langle \phi(x), \phi(x') \rangle_{\mathcal{H}} \quad \forall x, x' \in \mathcal{X} $$
-    Since $\phi(x) \in \mathcal{H}$ is a function, we may write $\phi(x)=k(\cdot, x)$. $k(\cdot, x)$ is called the canonical feature map.
-\end{definition}
-Sums and products of kernels are also kernels. Two examples of commonly used kernels in $\mathbb{R}^{d}$ are the linear kernel
+When $\mathcal{F}$ is a unit ball on an RKHS $\mathcal{H}$ with associated kernel $k(\cdot, \cdot)$, the MMD admits the closed form
 \begin{equation}
-    k_{\text{linear}}(\mathbf{x}, \mathbf{x}') = \langle \mathbf{x}, \mathbf{x}' \rangle
-    \label{eq:linear_kernel}
+        \mathrm{MMD}[\mathcal{F}, P, Q] = \Vert \mathbf{\mu}_{P}-\mathbf{\mu}_{Q} \Vert_{\mathcal{F}}
+    \label{eq:mmd_closed}
 \end{equation}
-and the Gaussian kernel
-\begin{equation}
-    k_{\text{RBF}}(\mathbf{x}, \mathbf{x}') = \exp{\left( -\frac{\Vert \mathbf{x}-\mathbf{x}' \Vert^{2}}{\sigma^{2}} \right)}, \quad \sigma > 0
-    \label{eq:gaussian_kernel}
-\end{equation}
-where $\sigma$ is called the bandwidth. The behavior of $k_{\text{RBF}}$ is highly dependent on $\sigma$. $k_{\text{RBF}}(\mathbf{x}, \mathbf{x})$ is always equal to 1. As $\sigma\rightarrow\infty$, $k_{\text{RBF}}(\mathbf{x}, \mathbf{x}') \rightarrow 1$ for all $\mathbf{x}, \mathbf{x}'$; informally, the kernel becomes insensitive to differences between $\mathbf{x}$ and $\mathbf{x}'$. Conversely, as $\sigma\rightarrow 0$, $k_{\text{RBF}}(\mathbf{x}, \mathbf{x}') \rightarrow 0$ for $\mathbf{x} \neq \mathbf{x}'$; the kernel becomes very sensitive. Bandwidth selection is an area of ongoing research; for example, see \cite{sutherland_generative_2019}.
-
-\begin{definition}[Reproducing Kernel Hilbert Space]
-    A Hilbert space $\mathcal{H}$ is a Reproducing Kernel Hilbert Space (RKHS) if, for an associated kernel $k$
-    \begin{enumerate}
-        \item $k(\cdot, x) \in \mathcal{H} \quad \forall x \in \mathcal{X}$
-        \item $\langle f, k(\cdot, x) \rangle_{\mathcal{H}} = f(x) \quad \forall f \in \mathcal{H}, x \in \mathcal{X} $ (reproducing property)
-    \end{enumerate}
-    $k(\cdot, \cdot)$ is called a reproducing kernel.
-\end{definition}
-
-\begin{definition}[Universal Kernel]
-Let $\mathcal{Z}$ be a compact subset of $\mathcal{X}$, and let $C(\mathcal{Z})$ denote the space of all continuous functions from $\mathcal{Z}$ to $\mathbb{R}$. A continuous (by \cite{steinwart_uence_2001} Lemma 3, a kernel is continuous iff its feature map is continuous) reproducing kernel $k$ on $\mathcal{Z}$ is universal if $\forall f \in C(\mathcal{Z}), \epsilon>0$, there exists a function in the associated RKHS $g \in \mathcal{H}$ such that 
-$$ \Vert f-g \Vert_{\infty} \leq \epsilon $$
-The associated RKHS of a universal kernel is called a universal RKHS \cite{steinwart_uence_2001}.
-\end{definition}
-In particular, the Gaussian kernel is universal on $\mathbb{R}^{d}$ \cite{steinwart_uence_2001}.
-
+where
 \begin{definition}[Mean embedding]
 The mean embedding $\mu_{P}$ in RKHS $\mathcal{H}$ of a distribution $P$ is defined as 
     \begin{equation}
@@ -192,21 +162,7 @@ The empirical estimate of the mean embedding is
     \hat{\mathbf{\mu}}_{P}(t) = \frac{1}{N}\sum_{i=1}^{N}\phi(x_{i})
 \end{equation}
 
-
-
-\begin{definition}[Maximum Mean Discrepancy (MMD)]
-Let $\mathcal{F}$ be a space of functions $f:\mathcal{X}\rightarrow \mathbb{R}$, where $\mathcal{X}$ is a non-empty set. Then the Maximum Mean Discrepancy (MMD) is defined as the integral probability metric
-    \begin{equation}
-        \mathrm{MMD}[\mathcal{F}, P, Q]=\sup _{f \in \mathcal{F}}\left(\mathbf{E}_{X}[f(X)]-\mathbf{E}_{Y}[f(Y)]\right)
-    \label{eq:mmd}
-    \end{equation}
-\end{definition}
-When $\mathcal{F}$ is a unit ball on an RKHS $\mathcal{H}$ with associated kernel $k(\cdot, \cdot)$, the MMD admits the closed form
-\begin{equation}
-        \mathrm{MMD}[\mathcal{F}, P, Q] = \Vert \mathbf{\mu}_{P}-\mathbf{\mu}_{Q} \Vert_{\mathcal{F}}
-    \label{eq:mmd_closed}
-\end{equation}
-and the biased empirical MMD can be computed via
+A biased estimate of the (squared) MMD is
 \begin{equation}
         \widehat{\mathrm{MMD}}_{V}^{2} = \Vert \hat{\mathbf{\mu}}_{P}-\hat{\mathbf{\mu}_{Q}} \Vert_{\mathcal{F}} = \frac{1}{N_{x}^{2}} \sum_{i=1}^{N_{x}} \sum_{j=1}^{N_{x}} k\left(x_{i}, x_{j}\right)+\frac{1}{N_{y}^{2}} \sum_{i=1}^{N_{y}} \sum_{j=1}^{N_{y}} k\left(y_{i}, y_{j}\right)
         -\frac{2}{N_{x} N_{y}} \sum_{i=1}^{N_{x}} \sum_{j=1}^{N_{y}} k\left(x_{i}, y_{j}\right)
@@ -228,7 +184,14 @@ When $N_{x}=N_{y}=N$, \eqref{eq:mmd_biased} and \eqref{eq:mmd_unbiased} can be w
 \end{equation}
 where $Z = (X, Y) \sim P \times Q$ and $h(z_{i}, z_{j})=k(x_{i}, x_{j}) + k(y_{i}, y_{j}) - k(x_{i}, y_{j}) - k(x_{j}, y_{i})$. These estimates can be computed in quadratic time. Linear time versions also exist; however, their speed comes at the cost of higher variance and reduced power of related tests \cite{gretton_kernel_2012}.
 
-For a certain set of reproducing kernels, \eqref{eq:mmd} is a metric on the space of probability distributions $M$, i.e. $\mathrm{MMD}[\mathcal{H}, P, Q]$ iff $P=Q$. Kernels that satisfy this property are called characteristic, and all universal kernels are also characteristic \cite{sriperumbudur_hilbert_2010}.
+For a certain set of reproducing kernels, \eqref{eq:mmd} is a metric on the space of probability distributions $M$, i.e. $\mathrm{MMD}[\mathcal{H}, P, Q]$ iff $P=Q$. Kernels that satisfy this property are called characteristic. All universal kernels are also characteristic \cite{sriperumbudur_hilbert_2010}.
+
+\begin{definition}[Universal Kernel]
+Let $\mathcal{Z}$ be a compact subset of $\mathcal{X}$, and let $C(\mathcal{Z})$ denote the space of all continuous functions from $\mathcal{Z}$ to $\mathbb{R}$. A continuous (by \cite{steinwart_uence_2001} Lemma 3, a kernel is continuous iff its feature map is continuous) reproducing kernel $k$ on $\mathcal{Z}$ is universal if $\forall f \in C(\mathcal{Z}), \epsilon>0$, there exists a function in the associated RKHS $g \in \mathcal{H}$ such that 
+$$ \Vert f-g \Vert_{\infty} \leq \epsilon $$
+The associated RKHS of a universal kernel is called a universal RKHS \cite{steinwart_uence_2001}.
+\end{definition}
+In particular, the Gaussian kernel is universal on $\mathbb{R}^{d}$ \cite{steinwart_uence_2001}.
 
 Tests based on MMD exploit the limiting distributions under the null hypothesis \cite{gretton_kernel_2012, chwialkowski_wild_2016}, calculating test thresholds for a given significance level $\alpha$ by bootstrap.
 
@@ -239,47 +202,19 @@ When the samples are i.i.d., we can apply the permutation bootstrap. We draw $N_
 \end{equation}
 Repeating this process many times, we can estimate the test threshold using the $1-\alpha$ empirical quantile of the bootstrapped statistics.
 
-When the samples are not i.i.d., as in MCMC, the permutation bootstrap is inappropriate because it breaks the dependence between observations. \cite{chwialkowski_wild_2016} provide a general procedure for simulating the null distribution based on the dependent wild bootstrap \cite{shao_dependent_2010}. The procedure multiplies the evaluations of the kernel (not the data themselves) in \eqref{eq:mmd_biased_v} by randomly generated time series, implicitly generating new samples with the same dependence structure as the original data.
-
-The main assumption is that the samples to be tested are $\tau$-dependent
-\begin{definition}[$\tau$-dependence]
-Let $\{Z_{t}, \mathcal{F}_{t}\}_{t \in \mathbb{N}}$ be a stationary sequence of integrable random variables defined on probability space $(\Omega, \mathcal{A}, P)$ with natural filtration $\mathcal{F}_{t}$. $\{Z_{t}, \mathcal{F}_{t}\}_{t \in \mathbb{N}}$ is $\tau$-dependent if
-\begin{equation}
-    \tau(r)=\sup _{l \in \mathbb{N}} \frac{1}{l} \sup _{r \leq i_{1} \leq \ldots \leq i_{l}} \tau\left(\mathcal{F}_{0},\left(Z_{i_{1}}, \ldots, Z_{i_{l}}\right)\right) \stackrel{r \rightarrow \infty}{\longrightarrow} 0
-\end{equation}
-where $\tau(\mathcal{M}, X)=E\left(\sup _{g \in \Lambda}\left|\int g(t) P_{X \mid \mathcal{M}}(d t)-\int g(t) P_{X}(d t)\right|\right)$ and $\Lambda$ is the set of all one-Lipschitz continuous real-valued functions on the domain of X.
-\end{definition}
-In particular, Markov chains are $\tau$-mixing under certain assumptions (see \cite{chwialkowski_wild_2016} appendix B and \cite{dedecker_new_2005}).
-
-The type of time series required is called a wild bootstrap process
-\begin{definition}[Wild bootstrap process]
-A wild bootstrap process $\mathbf{W} \in \mathbb{R}^{N \times N}$ or $\{W_{t, N}\}_{1 \leq t \leq N}$ is a row-wise strictly stationary, triangular array such that $\E[W_{t,N}] = 0$ and $\sup_{N} \E[|W_{t,N}^{2+\sigma}|]<\infty$ for some $\sigma > 0$. The autocovariance of the process is given by $\E[W_{s,N}, W_{t,N}] = \rho(\frac{|s-t|}{l_{B}})$ for some function $\rho$ satisfying 
-\begin{itemize}
-    \item $\lim_{u\rightarrow\infty} \rho(u)=1$
-    \item $\sum_{r=1}^{N-1} \rho(\frac{|r|}{l_{N}}) = O(l_{N})$
-\end{itemize}
-The sequence $\{l_{N}\}$ satisfies $l_{N}=O(N)$ and $\lim_{N\rightarrow \infty}l_{N} = \infty$. $\{W_{t, N}\}_{1 \leq t \leq N}$ are $\tau$-dependent with coefficients $\tau(r) \leq C\zeta^{\frac{r}{l_{N}}}$ for $r \in \{1, \ldots, N\}, \zeta \in (0,1), C \in \mathbb{R}$.
-\end{definition}
-Specifically, we use the wild bootstrap process from \cite{chwialkowski_wild_2016}
+When the samples are not i.i.d., as in MCMC, the permutation bootstrap is inappropriate because it breaks the dependence between observations. \cite{chwialkowski_wild_2016} provide a general procedure for simulating the null distribution based on the dependent wild bootstrap \cite{shao_dependent_2010}. The procedure multiplies the evaluations of the kernel (not the data themselves) in \eqref{eq:mmd_biased_v} by randomly generated time series a wild bootstrap process, implicitly generating new samples with the same dependence structure as the original data. A key assumption is that the samples are $\tau$-mixing, which \cite{chwialkowski_wild_2016} appendix B relates to classical strong mixing coefficients for Markov chains. In addition, the wild bootstrap process must satisfy \cite{leucht_dependent_2013} B1-2; we use the example given by \cite{leucht_dependent_2013} Remark 2 and used in \cite{chwialkowski_wild_2016}
 \begin{equation}
     W_{t, N}=\exp{\left(-\frac{1}{l_{N}}\right)} W_{t-1, N}+\sqrt{1-\exp{\left(-\frac{2}{l_{N}}\right)}} \epsilon_{t}
     \label{eq:wb_process}
 \end{equation}
-with $W_{0,N}, \epsilon_{t} \sim \mathcal{N}(0,1)$. For convenience, we write $W_{i,N}$ as $W_{i}$. The wild-bootstrapped MMD is
+with $W_{0,N}, \epsilon_{t} \sim \mathcal{N}(0,1)$. Writing $W_{i,N}$ as $W_{i}$, the wild-bootstrapped MMD is
 \begin{equation}
-\begin{array}{c}
-\widehat{\mathrm{MMD}}^{2}_{V, b}=\frac{1}{N_{x}^{2}} \sum_{i=1}^{N_{x}} \sum_{j=1}^{N_{x}} W_{i}^{(x)} W_{j}^{(x)} k\left(X_{i}, X_{j}\right)+\frac{1}{N_{y}^{2}} \sum_{i=1}^{N_{y}} \sum_{j=1}^{N_{y}} W_{i}^{(y)} W_{j}^{(y)} k\left(Y_{i}, Y_{j}\right) \\
-\quad-\frac{2}{N_{x} N_{y}} \sum_{i=1}^{n_{s}} \sum_{j=1}^{N_{y}} W_{i}^{(x)} W_{j}^{(y)} k\left(X_{i}, Y_{j}\right)
-\end{array}
-\label{eq:wb_mmd}
+    \begin{array}{c}
+    \widehat{\mathrm{MMD}}^{2}_{V, b}=\frac{1}{N_{x}^{2}} \sum_{i=1}^{N_{x}} \sum_{j=1}^{N_{x}} W_{i}^{(x)} W_{j}^{(x)} k\left(X_{i}, X_{j}\right)+\frac{1}{N_{y}^{2}} \sum_{i=1}^{N_{y}} \sum_{j=1}^{N_{y}} W_{i}^{(y)} W_{j}^{(y)} k\left(Y_{i}, Y_{j}\right) \\
+    \quad-\frac{2}{N_{x} N_{y}} \sum_{i=1}^{n_{s}} \sum_{j=1}^{N_{y}} W_{i}^{(x)} W_{j}^{(y)} k\left(X_{i}, Y_{j}\right)
+    \end{array}
+    \label{eq:wb_mmd}
 \end{equation}
-We could also replace $W_{t}^{(x)}, W_{t}^{(y)}$ with their centered versions $\tilde{W}_{t}^{(x)}=W_{t}^{(x)}-\frac{1}{N_{x}} \sum_{i=1}^{N_{x}} W_{i}^{(x)}, \tilde{W}_{t}^{(y)}=W_{t}^{(y)}-\frac{1}{N_{y}} \sum_{j=1}^{N_{y}} W_{j}^{(y)}$; however, this tends to result in weaker control of Type I errors \cite{chwialkowski_wild_2016}.
-
-Under the null hypothesis
-\begin{equation*}
-    \varphi\left(\rho_{x} \rho_{y} n \widehat{MMD}_{V}^{2}, \rho_{x} \rho_{y} n \widehat{MMD}^{2}_{V, b}\right) \xrightarrow[]{p} 0, \quad N \rightarrow \infty
-\end{equation*}
-where $\rho_{x} = \frac{N_{x}}{N_{x} + N_{y}}$, $\rho_{y} = \frac{N_{y}}{N_{x} + N_{y}}$.
 
 \subsection{Related Work}
 Current MCMC validation tests are either two-sample or parametric. Two sample tests rely on the fact that there are multiple ways to generate samples from the joint distribution $P(\mathbf{\Theta}, \mathbf{Y})$. One set of samples is generated via Algorithm \ref{alg:mc-sampler}, drawing from the prior $P(\mathbf{\Theta})$ and then the likelihood $P(\mathbf{Y}| \mathbf{\Theta})$ to obtain a single observation. In addition, following Algorithm \ref{alg:sc-sampler}, we can alternate between drawing from the likelihood $P(\mathbf{Y}| \mathbf{\Theta})$ and the posterior $P(\mathbf{\Theta}|\mathbf{Y})$. Finally, we may also draw from the marginal distribution $P(\mathbf{Y})$ of the data, then the posterior $P(\mathbf{\Theta} | \mathbf{Y})$ (with some burn-in), following Algorithm \ref{alg:bc-sampler}. If the MCMC posterior sampler is correctly implemented, then the empirical limiting distributions from each Algorithm will be indistinguishable; this is indirectly checked by testing the equality of a set of user-defined functions of the samples called test functions.
@@ -317,22 +252,6 @@ Current MCMC validation tests are either two-sample or parametric. Two sample te
     \end{algorithmic}
 \end{algorithm}
 
-\begin{algorithm}
-    \centering
-    \caption{Backward-conditional (BC) joint simulator}\label{alg:bc-sampler}
-    \begin{algorithmic}[1]
-        \State \text{Initialize} $\mathbf{g}_{BC} \in \mathbb{R}_{N\times |\mathbf{g}|}$
-        \For{$n = 1, \ldots, N_{BC}$}
-            \State $\mathbf{\Theta}_{0} \sim P(\mathbf{\Theta})$ 
-            \State $\mathbf{Y}_{n} \sim P(\mathbf{Y}|\mathbf{\Theta}_{0})$ 
-            \For{$m = 1, \ldots, M$}    
-                \State $\mathbf{\Theta}_{n} \sim \text{PosteriorSampler}(\mathbf{\Theta}_{n}, \mathbf{Y}_{n})$
-            \EndFor
-            \State $\mathbf{g}_{BC}[n, :] = \mathbf{g}(\mathbf{\Theta}_{n}, \mathbf{Y}_{n})$ 
-        \EndFor        
-        \State \textbf{return} $\mathbf{g}_{BC}$
-    \end{algorithmic}
-\end{algorithm}
 The earliest proposed MCMC diagnostic in the literature is the Geweke two-sample test \cite{geweke_getting_2004}, which compares samples from Algorithms \ref{alg:mc-sampler} and \ref{alg:sc-sampler}. Let $\mathbf{g}$ denote a vector of test functions. For each test function $g$, the Geweke test conducts a z-test on two estimates of $\bar{g} = \E[g(\mathbf{\Theta}, \mathbf{Y})]$, correcting for multiple testing.
 \begin{equation}
     \frac{\hat{\bar{g}}_{MC} - \hat{\bar{g}}_{SC}}{\sqrt{ \frac{\hat{\sigma}^{2}_{MC}}{N_{MC}} + \frac{\hat{\sigma}^{2}_{SC}}{N_{SC}}}} \xrightarrow[]{d} \mathcal{N}(0, 1)
@@ -356,6 +275,23 @@ See \cite{priestley_spectral_1981} for more on window functions.
 Noting difficulties in estimating $\hat{\sigma}_{SC}^{2}$, \cite{grosse_testing_2014} advocate diagnosing errors visually rather than formally conducting the test. They generate PP plots of the corresponding test functions from each simulator. If the points in any plot are far from the unit line, they reject the null hypothesis.
 
 Correcting an earlier method \cite{cook_validation_2006, gelman_correction_2017}, \cite{talts_validating_2018} take a parametric approach under the assumption that the posterior is absolutely continuous. Each iteration of their algorithm draws $\mathbf{\Theta}_{0}$ from the prior $P(\mathbf{\Theta})$ and $\mathbf{Y}$ from the likelihood $P(\mathbf{Y}|\mathbf{\Theta}_{0})$, and then draws $\{\mathbf{\Theta}_{\ell}\}_{\ell=1}^{L}$ from the posterior $P(\mathbf{\Theta}_{0})$ using the to-be-checked posterior sampler. The Markov chain from the posterior sampler is thinned such that the $L$ samples are approximately independent. The algorithm then calculates the rank statistic of $\mathbf{\Theta}_{0}$ among $\{\mathbf{\Theta}_{\ell}\}_{\ell=1}^{L}$. If the posterior sampler is correct, then the resulting rank statistics should be uniformly distributed on $\{1, \ldots, L\}$. The authors suggest examining histograms of the rank statistics to better understand errors rather than conducting a formal test.
+
+\begin{algorithm}
+    \centering
+    \caption{Backward-conditional (BC) joint simulator}\label{alg:bc-sampler}
+    \begin{algorithmic}[1]
+        \State \text{Initialize} $\mathbf{g}_{BC} \in \mathbb{R}_{N\times |\mathbf{g}|}$
+        \For{$n = 1, \ldots, N_{BC}$}
+            \State $\mathbf{\Theta}_{0} \sim P(\mathbf{\Theta})$ 
+            \State $\mathbf{Y}_{n} \sim P(\mathbf{Y}|\mathbf{\Theta}_{0})$ 
+            \For{$m = 1, \ldots, M$}    
+                \State $\mathbf{\Theta}_{n} \sim \text{PosteriorSampler}(\mathbf{\Theta}_{n}, \mathbf{Y}_{n})$
+            \EndFor
+            \State $\mathbf{g}_{BC}[n, :] = \mathbf{g}(\mathbf{\Theta}_{n}, \mathbf{Y}_{n})$ 
+        \EndFor        
+        \State \textbf{return} $\mathbf{g}_{BC}$
+    \end{algorithmic}
+\end{algorithm}
 
 A recent study \cite{gandy_unit_2020} proposes two tests --- one two-sample and one parametric --- that we use as benchmarks. The authors also introduce a wrapper function that, if the null hypothesis is not rejected, repeatedly runs a given test with reduced critical values, improving power while keeping false positive rates low. The two-sample test is based on Algorithms \ref{alg:mc-sampler} and \ref{alg:bc-sampler}. The authors avoid prescribing a specific procedure, but for example, the Kolmogorov-Smirnov test may be used for continuous parameters, and a likelihood ratio test may be used in the discrete case. The parametric test in \cite{gandy_unit_2020} is similar to \cite{talts_validating_2018}, but does not require independent samples or a continuous posterior. Instead, it only requires the reversibility of the MCMC sampler. Each iteration of the algorithm draws $M \sim \mathcal{U}(\{1, \ldots, L\})$, and then draws $\mathbf{\Theta}_{M}$ from the prior $P(\mathbf{\Theta})$ and and $\mathbf{Y}$ from the likelihood $P(\mathbf{Y}|\mathbf{\Theta}_{0})$.  The posterior sampler is then run forward to generate $\{\mathbf{\Theta}_{\ell}\}_{\ell=M+1}^{L}$ and backward to generate $\{\mathbf{\Theta}_{\ell}\}_{\ell=1}^{M-1}$. If the posterior is correct, then the rank statistic of $\mathbf{g}(\mathbf{Y},\mathbf{\Theta}_{M})$ among $\{\mathbf{g}(\mathbf{Y},\mathbf{\Theta}_{\ell})\}_{\ell=1}^{\ell=L}$ should be uniformly distributed. This is verified using a $\chi^{2}$ test. Since the two-sample test using Kolmogorov-Smirnov and the Rank test both require sorting, their computational complexities are $O(NK \log NK)$.
 
@@ -410,7 +346,7 @@ Strictly speaking, for $\mathbf{x} = (\mathbf{\Theta}, \mathbf{Y})$ and $\mathbf
 \begin{equation}
     k(\mathbf{x}, \mathbf{x'}) = \exp{\left( -\frac{\Vert \mathbf{g}(\mathbf{x})-\mathbf{g}(\mathbf{x}') \Vert^{2}}{\sigma^{2}} \right)}
 \end{equation}
-rather than the true Gaussian kernel \eqref{eq:gaussian_kernel}. This kernel is characteristic for distributions of test functions, but not guaranteed to be characteristic on the space of joint distributions under \eqref{eq:testfn}. If the user is concerned about this, then they may set $\mathbf{g}(\mathbf{\Theta}, \mathbf{Y}) = \begin{bmatrix} \mathbf{Y} & \mathbf{\Theta} & P(\mathbf{Y}|\mathbf{\Theta}) & P(\mathbf{\Theta}) \end{bmatrix}^{\top}$ for a consistent joint test. In practice, however, \eqref{eq:testfn} provides better scaling with the dimensionality of the data, avoiding consequent power loss \cite{reddi_decreasing_2014}. This mirrors the approach of existing tests, which do not directly include the data in test functions. In Algorithm \ref{alg:sc-sampler}, if the marginal distribution of the sampled parameters is correct, then the marginal distribution of the sampled data is as well; the marginal distribution of the sampled data is always correct in Algorithm \ref{alg:bc-sampler}. Many errors in the dependence between $\mathbf{Y}$ and $\mathbf{\Theta}$ will manifest in the test function $P(\mathbf{Y}|\mathbf{\Theta})$. 
+rather than the true Gaussian kernel. This kernel is characteristic for distributions of test functions, but not guaranteed to be characteristic on the space of joint distributions under \eqref{eq:testfn}. In particular, in Algorithm \ref{alg:sc-sampler}, if the marginal distribution of the sampled parameters is correct, then the marginal distribution of the sampled data is as well; similarly, the marginal distribution of the sampled data is always correct in Algorithm \ref{alg:bc-sampler}. In contrast, errors in the dependence between $\mathbf{Y}$ and $\mathbf{\Theta}$ may still be present, though some are accounted for by the test functions $P(\mathbf{Y}|\mathbf{\Theta})$ and $P(\mathbf{\Theta})$. For a consistent joint test, the user may include $\mathbf{Y})$ as test functions. However, as the dimensionality of the data increases, \eqref{eq:testfn} avoids consequent power loss \cite{reddi_decreasing_2014}.
 
 \section{EXPERIMENTS}
 We conduct three experiments to compare the performance of the successive-conditional and backward-conditional MMD tests (MMD-SC test and MMD-BC test, respectively) to the Geweke test as well as other benchmark tests from \cite{gandy_unit_2020}, where appropriate. We use the Benjamini-Hochberg procedure \cite{benjamini_controlling_1995} for all multiple testing corrections. 
@@ -429,11 +365,11 @@ By conjugacy, the Gibbs updates for $\mathbf{\theta}$ are
 \begin{align}
 \theta_{i} \sim \mathcal{N}\left(
 \frac{\sigma^{2}}{\sigma_{\epsilon}^{2}+\sigma^{2}}\left(y-\theta_{j}\right)
-, \frac{1}{\frac{1}{\sigma_{\epsilon}^{2}}+\frac{1}{\sigma^{2}}}\right), \quad i=1,2
+, \frac{1}{\frac{1}{\sigma_{\epsilon}^{2}}+\frac{1}{\sigma^{2}}}\right), \quad i,j=1,2, i \neq j
 \end{align}
 The hyperparameters are set to $\sigma^{2}=100, \sigma_{\epsilon}^{2}=0.1$. Each iteration of the Gibbs sampler updates $\theta_{1}$ and $\theta_{2}$ in random order to preserve reversibility, which is required for the Rank test.
 
-Since the three errors introduced in \cite{gandy_unit_2020} are all either too easy to detect or unclear, we introduce two errors into the posterior sampler illustrating the importance of the auxiliary features. In the first error, the posterior distribution means are swapped. This is a plausible but subtle error; because the parameters are symmetric, the marginal distribution of the parameters is unchanged, and two-sample tests based solely on this marginal will fail to detect any error. In the second error, we replace the normal distributions in the Gibbs steps with Laplace distributions preserving the correct means and variance. These errors are summarized in Table \ref{tab:ex1_errors}.
+Since the three errors introduced in \cite{gandy_unit_2020} are all either too easy to detect or unclear, we introduce two errors into the posterior sampler illustrating the importance of the auxiliary features. In the first error, the posterior distribution means are swapped. In the second error, we replace the normal distributions in the Gibbs steps with Laplace distributions preserving the correct means and variance. These errors are summarized in Table \ref{tab:ex1_errors}.
 
 \begin{table}[H]
     \centering
@@ -575,7 +511,7 @@ The Type I error rates of the BC tests hover around the design parameter of $\al
 
 For the two-sample tests, the Transition error is much easier to detect than the Poisson error, while the opposite is true for the Rank test.  Notably, while the Geweke test detects the Transition error quite easily, it essentially is unable to detect the Poisson error at the computation levels shown. In contrast, the other tests perform reasonably well, with Type II error rates that fall relatively quickly with sample size. 
 
-Across both errors, we see that the MMD-SC test has lower Type II error rates than the MMD-BC test --- further evidence of the error magnification properties of Algorithm \ref{alg:sc-sampler}. The MMD-SC test most efficiently detects the Transition error, but lags behind the KS and Rank tests in detecting the Poisson error. The performance of the KS and Rank tests are quite consitent across both errors, with the KS test detecting the errors especially efficiently. This implies that the test functions accurately capture some of the discrepancies between samples.
+Across both errors, we see that the MMD-SC test has lower Type II error rates than the MMD-BC test --- further evidence of the error magnification properties of Algorithm \ref{alg:sc-sampler}. The MMD-SC test most efficiently detects the Transition error, but lags behind the KS and Rank tests in detecting the Poisson error. The performance of the KS and Rank tests are quite consistent across both errors, with the KS test detecting the errors especially efficiently. This implies that the test functions accurately capture some of the discrepancies between samples.
 
 \begin{figure}[H]
     \centering
@@ -618,7 +554,7 @@ The sampler errors considered all affect the Metropolis-Hastings acceptance prob
     \begin{tabular}{l|c|c|c}
           Error & Components & Incorrect & Correct \\
          \hline
-         Cyclic Check & $|\mathbf{Ne}(\mathcal{G})|, |\mathbf{Ne}(\mathcal{G}')|$ & Count all graphs & Count all DAGs \\
+         Cyclic Check & $|\mathbf{Ne}(\mathcal{G})|, |\mathbf{Ne}(\mathcal{G}')|$ & Count neighboring graphs & Count neighboring DAGs \\
          Rev Count & $|\mathbf{Ne}(\mathcal{G})|, |\mathbf{Ne}(\mathcal{G}')|$ & Count edge reversals twice & Count reversals once \\
     \end{tabular}
     \caption{Experiment 3 intentional errors in posterior sampler}
@@ -679,7 +615,7 @@ In addition to the implicit features encoded in the chosen kernel, as we saw in 
 
 If we are given a choice between the MMD-SC and MMD-BC tests, which one should we pick? The answer depends on how much we value accuracy versus speed. The MMD-SC test is preferable for accuracy. In experiments 2 and 3, we saw that it was significantly better at detecting errors than the MMD-BC test, while keeping the Type I error rates similar. On the other hand, this improved performance comes at a potentially steep cost. The results of experiment 1, Figure \ref{fig:ex1_auto}, showed us that high autocorrelation in the samples (slow mixing in the posterior sampler) drawn by Algorithm \ref{alg:sc-sampler} hamstrings the MMD-SC test. In order to control the Type I error rate under this regime, we must draw many more, heavily thinned samples. relative to the MMD-BC test. 
 
-In terms of speed, the MMD-BC test is the clear winner. The MMD-SC and MMD-BC tests are quite similar in raw operation count. Assume we have an equal number of samples $N$ from Algorithms \ref{alg:mc-sampler}, \ref{alg:sc-sampler}, and \ref{alg:bc-sampler}. Let $K$ denote the cost of computing the kernel on one pair of observations, let $B$ denote the number of bootstrapped statistics generated. In the experiments we conducted, we kept the number of samples drawn constant. Computing the biased statistic \eqref{eq:mmd_biased} used in the MMD-SC test is $O(3KN^{2})$, while computing the unbiased statistic \eqref{eq:mmd_unbiased} is $O(3KN^{2}-2KN)$. Computing the wild and permutation bootstrapped statistics both cost $O(3N^{2})$. The main computational difference between the MMD-SC and MMD-BC tests is in their ability to be parallelized. The samples from Algorithm \ref{alg:sc-sampler} must be drawn in sequence if they are to amplify errors; we cannot take advantage of more than two threads. In contrast, since each sample from Algorithm \ref{alg:bc-sampler} is independent, we can use up to $N$ threads.
+In terms of speed, the MMD-BC test is the clear winner. The MMD-SC and MMD-BC tests are quite similar in raw operation count. Assume we have an equal number of samples $N$ from Algorithms \ref{alg:mc-sampler}, \ref{alg:sc-sampler}, and \ref{alg:bc-sampler}, and let $K$ denote the cost of evaluating the kernel function on one set of observations. The test statistics \eqref{eq:mmd_biased} and \eqref{eq:mmd_unbiased} both cost $O(KN^{2})$ to compute; the wild and permutation bootstrapped statistics are $O(N^{2})$. The main computational difference between the MMD-SC and MMD-BC tests is in their ability to be parallelized. The samples from Algorithm \ref{alg:sc-sampler} must be drawn in sequence if they are to amplify errors; we cannot take advantage of more than two threads. In contrast, since each sample from Algorithm \ref{alg:bc-sampler} is independent, we can use up to $N$ threads.
 
 \section{CONCLUSION}
 
