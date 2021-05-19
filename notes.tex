@@ -1,0 +1,159 @@
+\documentclass[a4paper,11pt]{article}
+\usepackage{setspace}
+\usepackage[utf8]{inputenc}
+%\usepackage{subfigure}
+
+\pagestyle{plain}
+
+\usepackage{amssymb, bm, blkarray, multicol}
+\usepackage{listings,xcolor,lmodern}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage[nottoc]{tocbibind}
+\usepackage{upgreek}
+
+\usepackage{mathtools}
+\mathtoolsset{showonlyrefs}
+
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{nicefrac}
+\usepackage{microtype}
+
+\usepackage{latexsym}
+% \usepackage{a4wide}
+
+\newtheorem{theorem}{THEOREM}
+\newtheorem{lemma}[theorem]{LEMMA}
+\newtheorem{corollary}[theorem]{COROLLARY}
+\newtheorem{proposition}[theorem]{PROPOSITION}
+\newtheorem{remark}[theorem]{REMARK}
+\newtheorem{definition}[theorem]{DEFINITION}
+\newtheorem{fact}[theorem]{FACT}
+
+\newtheorem{problem}[theorem]{PROBLEM}
+\newtheorem{exercise}[theorem]{EXERCISE}
+\def \set#1{\{#1\} }
+
+\lstset{
+  basicstyle=\ttfamily,
+  columns=fullflexible,
+  frame=single,
+  breaklines=true,
+  postbreak=\mbox{\textcolor{red}{$\hookrightarrow$}\space},
+}
+
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\var}{\mathrm{Var}}
+\newcommand{\cov}{\mathrm{Cov}}
+\newcommand{\KL}{\mathrm{KL}}
+\newcommand{\neighb}{\text{ne}}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\newcommand{\Perp}{\mathrel{\text{\scalebox{1.07}{$\perp\mkern-10mu\perp$}}}}
+
+\usetikzlibrary{shapes.geometric}
+
+\begin{document}
+Existing tests test moments of the marginal distributions of $\theta$ and sometimes the evaluations of $p(y|\theta), p(\theta)$. What test functions should we choose for the MMD tests?
+
+\section{MMD-SC}
+
+Let $q_{\text{SC}}$ denote the transition kernel for Algorithm \ref{alg:sc-sampler}. Then $q_{\text{SC}}(\theta', y' | \theta, y) = q(\theta' | y') p(y' | \theta) q(\theta, y)$ and 
+\begin{align*}
+    q_{\text{SC}}(\theta', y') &= \int q_{\text{SC}}(\theta', y' | \theta, y) q(\theta, y) d\theta dy \\
+                    &= \int q_{\text{SC}}(\theta' | y') p(y' | \theta) q_{\text{SC}}(\theta, y) d\theta dy \\
+                    &= q_{\text{SC}}(\theta' | y') \int p(y' | \theta) q_{\text{SC}}(\theta) d\theta \\
+\end{align*}
+If the marginals are correct, $q_{\text{SC}}(\theta) = p(\theta)$ and
+\begin{align*}
+    q_{\text{SC}}(\theta', y') = q_{\text{SC}}(\theta' | y') \int p(y' | \theta) q_{\text{SC}}(\theta) d\theta = q_{\text{SC}}(\theta' | y') p(y')
+\end{align*}
+$q_{\text{SC}}(\theta' | y') = p(\theta'|y') \rightarrow q_{\text{SC}}(\theta' | y') p(y') = p(\theta', y') \rightarrow q_{\text{SC}}(\theta) = p(\theta) $, but the other direction does not necessarily hold. Equality of the marginal distributions of $\theta$ is not enough to show equality of the joints.
+
+However, $q_{\text{SC}}(\theta) = p(\theta)$ does imply $q_{\text{SC}}(y) = p(y)$, so
+\begin{align*}
+    q_{\text{SC}}(\theta' | y') &= \frac{q_{\text{SC}}(y' | \theta') q_{\text{SC}}(\theta')}{q_{\text{SC}}(y')} \\
+                                &= \frac{q_{\text{SC}}(y' | \theta') p(\theta')}{p(y')} \\
+\end{align*}
+
+Thus, if $q_{\text{SC}}(y' | \theta') = p(y' | \theta')$, then $q_{\text{SC}}(\theta' | y') = p(\theta' | y')$ and the joint distributions are the same. 
+
+Is testing the evaluation of the likelihood enough? Example where it is not:
+\begin{align*}
+    \theta &\sim \mathcal{U}(\{0, 1\}) \\
+    y &\sim \mathcal{U}(\{0, 1\}) \\
+    p(y | \theta) &= 0.25
+\end{align*}
+vs
+\begin{align*}
+    \theta &\sim \mathcal{U}(\{0, 1\}) \\
+    q(y=i|\theta) &= \begin{cases}
+                            1 & \theta = i \\
+                            0 & \text{otherwise}
+                        \end{cases} \quad i \in \{0, 1\}
+\end{align*}
+The evaluations of $p(y | \theta)$ and the marginals are the same, but the joint distributions differ; the first model gives $(i, j) \quad \forall i, j \in \{0,1\}$, while the second gives $(i, i)$. This example relies on the independence of $\theta$ and $y$. 
+
+Can we come up with other examples? How might these arise in MCMC?
+
+\section{MMD-BC}
+Let $q_{\text{BC}}$ denote the joint distribution from Algorithm \ref{alg:bc-sampler}.
+\begin{align*}
+    q_{\text{BC}}(\theta', y') &= q_{\text{BC}}(\theta'|y')q(y') = q_{\text{BC}}(\theta'|y')p(y') \\
+\end{align*}
+By the same logic as for the MMD-SC test, if $q_{\text{BC}}(y' | \theta') = p(y' | \theta')$, then $q_{\text{BC}}(\theta' | y') = p(\theta' | y')$ and the joint distributions are the same.
+\newpage 
+
+\begin{algorithm}
+    \centering
+    \caption{Marginal-conditional (MC) joint simulator}\label{alg:mc-sampler}
+    \begin{algorithmic}[1]
+        \State \text{Initialize} $\mathbf{g}_{MC} \in \mathbb{R}_{N\times |\mathbf{g}|}$
+        \For{$n = 1, \ldots, N$}
+            \State $\mathbf{\Theta}_{n} \sim P(\mathbf{\Theta})$ 
+            \State $\mathbf{Y}_{n} \sim P(\mathbf{Y}|\mathbf{\Theta}_{n})$ 
+            \State $\mathbf{g}_{MC}[n, :] = \mathbf{g}(\mathbf{\Theta}_{n}, \mathbf{Y}_{n})$ 
+        \EndFor        
+        \State \textbf{return} $\mathbf{g}_{MC}$
+    \end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}
+    \centering
+    \caption{Successive-conditional (SC) joint simulator}\label{alg:sc-sampler}
+    \begin{algorithmic}[1]
+        \State \text{Initialize} $\mathbf{g}_{SC} \in \mathbb{R}_{N\times |\mathbf{g}|}$
+        \State $\mathbf{\Theta}_{0} \sim P(\mathbf{\Theta})$ 
+        \For{$n = 1, \ldots, N$}
+            \State $\mathbf{Y}_{n} \sim P(\mathbf{Y}|\mathbf{\Theta}_{n-1})$ 
+            \State $\mathbf{\Theta}_{n} \sim \text{PosteriorSampler}(\mathbf{\Theta}_{n-1}, \mathbf{Y}_{n})$ 
+            \State $\mathbf{g}_{SC}[n, :] = \mathbf{g}(\mathbf{\Theta}_{n}, \mathbf{Y}_{n})$ 
+        \EndFor        
+        \State \textbf{return} $\mathbf{g}_{SC}$
+    \end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+    \centering
+    \caption{Backward-conditional (BC) joint simulator}\label{alg:bc-sampler}
+    \begin{algorithmic}[1]
+        \State \text{Initialize} $\mathbf{g}_{BC} \in \mathbb{R}_{N\times |\mathbf{g}|}$
+        \For{$n = 1, \ldots, N_{BC}$}
+            \State $\mathbf{\Theta}_{0} \sim P(\mathbf{\Theta})$ 
+            \State $\mathbf{Y}_{n} \sim P(\mathbf{Y}|\mathbf{\Theta}_{0})$ 
+            \For{$m = 1, \ldots, M$}    
+                \State $\mathbf{\Theta}_{n} \sim \text{PosteriorSampler}(\mathbf{\Theta}_{n}, \mathbf{Y}_{n})$
+            \EndFor
+            \State $\mathbf{g}_{BC}[n, :] = \mathbf{g}(\mathbf{\Theta}_{n}, \mathbf{Y}_{n})$ 
+        \EndFor        
+        \State \textbf{return} $\mathbf{g}_{BC}$
+    \end{algorithmic}
+\end{algorithm}
+
+\end{document}

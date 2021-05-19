@@ -1,3 +1,115 @@
+% Encoding: UTF-8
+
+@article{mueller:1997,
+title={Integral probability metrics and their generating classes of functions},
+author={A. M\"uller},
+journal={Advanances in Applied Probability},
+year=1997,
+volume=29,
+pages={429--443}}
+
+
+@incollection{jeltsch_mcmc_2009,
+	address = {Zuerich, Switzerland},
+	title = {{MCMC} methods for sampling function space},
+	isbn = {978-3-03719-056-2},
+	url = {http://www.ems-ph.org/doi/10.4171/056-1/16},
+	language = {en},
+	urldate = {2021-05-17},
+	booktitle = {6th {International} {Congress} on {Industrial} and {Applied} {Mathematics} {Zürich}, {Switzerland}, 16-20 {July} 2007},
+	publisher = {European Mathematical Society Publishing House},
+	author = {Beskos, Alexandros and Stuart, Andrew},
+	editor = {Jeltsch, Rolf and Wanner, Gerhard},
+	month = jun,
+	year = {2009},
+	doi = {10.4171/056-1/16},
+	pages = {337--364},
+}
+
+@article{beskos_mcmc_2021,
+	title = {{MCMC} {Algorithms} for {Posteriors} on {Matrix} {Spaces}},
+	url = {http://arxiv.org/abs/2008.02906},
+	abstract = {We study Markov chain Monte Carlo (MCMC) algorithms for target distributions defined on matrix spaces. Such an important sampling problem has yet to be analytically explored. We carry out a major step in covering this gap by developing the proper theoretical framework that allows for the identification of ergodicity properties of typical MCMC algorithms, relevant in such a context. Beyond the standard Random-Walk Metropolis (RWM) and preconditioned Crank--Nicolson (pCN), a contribution of this paper in the development of a novel algorithm, termed the `Mixed' pCN (MpCN). RWM and pCN are shown not to be geometrically ergodic for an important class of matrix distributions with heavy tails. In contrast, MpCN has very good empirical performance within this class. Geometric ergodicity for MpCN is not fully proven in this work, as some remaining drift conditions are quite challenging to obtain owing to the complexity of the state space. We do, however, make a lot of progress towards a proof, and show in detail the last steps left for future work. We illustrate the computational performance of the various algorithms through simulation studies, first for the trivial case of an Inverse-Wishart target, and then for a challenging model arising in financial statistics.},
+	urldate = {2021-05-17},
+	journal = {arXiv:2008.02906 [stat]},
+	author = {Beskos, Alexandros and Kamatani, Kengo},
+	month = may,
+	year = {2021},
+	note = {arXiv: 2008.02906},
+	keywords = {65C05, 60H35, 60J76, Statistics - Computation, Statistics - Methodology},
+}
+
+@article{cowles_markov_1996,
+	title = {Markov {Chain} {Monte} {Carlo} {Convergence} {Diagnostics}: {A} {Comparative} {Review}},
+	volume = {91},
+	issn = {0162-1459, 1537-274X},
+	shorttitle = {Markov {Chain} {Monte} {Carlo} {Convergence} {Diagnostics}},
+	url = {http://www.tandfonline.com/doi/abs/10.1080/01621459.1996.10476956},
+	doi = {10.1080/01621459.1996.10476956},
+	language = {en},
+	number = {434},
+	urldate = {2021-05-03},
+	journal = {Journal of the American Statistical Association},
+	author = {Cowles, Mary Kathryn and Carlin, Bradley P.},
+	month = jun,
+	year = {1996},
+	pages = {883--904},
+}
+
+@Article{gorham_measuring_2020,
+  author   = {Gorham, Jackson and Mackey, Lester},
+  journal  = {arXiv:1703.01717 [cs, stat]},
+  title    = {Measuring Sample Quality with Kernels},
+  year     = {2020},
+  month    = oct,
+  note     = {arXiv: 1703.01717},
+  abstract = {Approximate Markov chain Monte Carlo (MCMC) offers the promise of more rapid sampling at the cost of more biased inference. Since standard MCMC diagnostics fail to detect these biases, researchers have developed computable Stein discrepancy measures that provably determine the convergence of a sample to its target distribution. This approach was recently combined with the theory of reproducing kernels to define a closed-form kernel Stein discrepancy (KSD) computable by summing kernel evaluations across pairs of sample points. We develop a theory of weak convergence for KSDs based on Stein's method, demonstrate that commonly used KSDs fail to detect non-convergence even for Gaussian targets, and show that kernels with slowly decaying tails provably determine convergence for a large class of target distributions. The resulting convergence-determining KSDs are suitable for comparing biased, exact, and deterministic sample sequences and simpler to compute and parallelize than alternative Stein discrepancies. We use our tools to compare biased samplers, select sampler hyperparameters, and improve upon existing KSD approaches to one-sample hypothesis testing and sample quality improvement.},
+  keywords = {Computer Science - Machine Learning, Statistics - Machine Learning},
+  url      = {http://arxiv.org/abs/1703.01717},
+  urldate  = {2021-05-03},
+}
+
+@article{sriperumbudur_universality_2011,
+	title = {Universality, {Characteristic} {Kernels} and {RKHS} {Embedding} of {Measures}},
+	volume = {12},
+	issn = {1532-4435},
+	abstract = {Over the last few years, two different notions of positive definite (pd) kernels—universal and characteristic—have been developing in parallel in machine learning: universal kernels are proposed in the context of achieving the Bayes risk by kernel-based classification/regression algorithms while characteristic kernels are introduced in the context of distinguishing probability measures by embedding them into a reproducing kernel Hilbert space (RKHS). However, the relation between these two notions is not well understood. The main contribution of this paper is to clarify the relation between universal and characteristic kernels by presenting a unifying study relating them to RKHS embedding of measures, in addition to clarifying their relation to other common notions of strictly pd, conditionally strictly pd and integrally strictly pd kernels. For radial kernels on ℜd, all these notions are shown to be equivalent.},
+	number = {null},
+	journal = {J. Mach. Learn. Res.},
+	author = {Sriperumbudur, Bharath K. and Fukumizu, Kenji and Lanckriet, Gert R. G.},
+	month = jul,
+	year = {2011},
+	note = {Publisher: JMLR.org},
+	pages = {2389--2410},
+}
+
+@article{primiceri_time_2005,
+	title = {Time {Varying} {Structural} {Vector} {Autoregressions} and {Monetary} {Policy}},
+	volume = {72},
+	url = {https://ideas.repec.org/a/oup/restud/v72y2005i3p821-852.html},
+	abstract = {Monetary policy and the private sector behaviour of the U.S. economy are modelled as a time varying structural vector autoregression, where the sources of time variation are both the coefficients and the variance covariance matrix of the innovations. The paper develops a new, simple modelling strategy for the law of motion of the variance covariance matrix and proposes an efficient Markov chain Monte Carlo algorithm for the model likelihood/posterior numerical evaluation. The main empirical conclusions are: (1) both systematic and non-systematic monetary policy have changed during the last 40 years—in particular, systematic responses of the interest rate to inflation and unemployment exhibit a trend toward a more aggressive behaviour, despite remarkable oscillations; (2) this has had a negligible effect on the rest of the economy. The role played by exogenous non-policy shocks seems more important than interest rate policy in explaining the high inflation and unemployment episodes in recent U.S. economic history. Copyright 2005, Wiley-Blackwell.},
+	number = {3},
+	journal = {Review of Economic Studies},
+	author = {Primiceri, Giorgio E.},
+	year = {2005},
+	pages = {821--852},
+}
+
+@article{geweke_bayesian_1996,
+	title = {Bayesian reduced rank regression in econometrics},
+	volume = {75},
+	issn = {03044076},
+	url = {https://linkinghub.elsevier.com/retrieve/pii/0304407695017739},
+	doi = {10.1016/0304-4076(95)01773-9},
+	language = {en},
+	number = {1},
+	urldate = {2020-09-10},
+	journal = {Journal of Econometrics},
+	author = {Geweke, John},
+	month = nov,
+	year = {1996},
+	pages = {121--146},
+}
 
 @article{grazian_review_2020,
 	title = {A review of approximate {Bayesian} computation methods via density estimation: {Inference} for simulator‐models},
@@ -12,7 +124,7 @@
 	journal = {WIREs Computational Statistics},
 	author = {Grazian, Clara and Fan, Yanan},
 	month = jul,
-	year = {2020}
+	year = {2020},
 }
 
 @article{bardenet_markov_2015,
@@ -25,7 +137,7 @@
 	month = may,
 	year = {2015},
 	note = {arXiv: 1505.02827},
-	keywords = {Statistics - Computation, Statistics - Machine Learning, Statistics - Methodology}
+	keywords = {Statistics - Computation, Statistics - Machine Learning, Statistics - Methodology},
 }
 
 @article{korattikara_austerity_2014,
@@ -39,7 +151,7 @@
 	month = feb,
 	year = {2014},
 	note = {arXiv: 1304.5299},
-	keywords = {Computer Science - Machine Learning, Statistics - Machine Learning}
+	keywords = {Computer Science - Machine Learning, Statistics - Machine Learning},
 }
 
 @article{lloyd_statistical_2015,
@@ -48,7 +160,7 @@
 	language = {en},
 	author = {Lloyd, James R and Ghahramani, Zoubin},
 	year = {2015},
-	pages = {9}
+	pages = {9},
 }
 
 @article{liu_kernelized_2016,
@@ -57,7 +169,7 @@
 	language = {en},
 	author = {Liu, Qiang and Lee, Jason D and Jordan, Michael},
 	year = {2016},
-	pages = {9}
+	pages = {9},
 }
 
 @inproceedings{bonferroni_il_1935,
@@ -65,7 +177,7 @@
 	title = {Il calcolo delle assicurazioni su gruppi di teste},
 	author = {Bonferroni, C.},
 	year = {1935},
-	pages = {13--60}
+	pages = {13--60},
 }
 
 @article{steinwart_uence_2001,
@@ -74,7 +186,7 @@
 	language = {en},
 	author = {Steinwart, Ingo},
 	year = {2001},
-	pages = {27}
+	pages = {27},
 }
 
 @article{sriperumbudur_hilbert_2010,
@@ -83,7 +195,7 @@
 	language = {en},
 	author = {Sriperumbudur, Bharath K and Gretton, Arthur and Fukumizu, Kenji and Scholkopf, Bernhard and Lanckriet, Gert R G},
 	year = {2010},
-	pages = {45}
+	pages = {45},
 }
 
 @book{serfling_approximation_2002,
@@ -96,7 +208,7 @@
 	publisher = {Wiley},
 	author = {Serfling, Robert J.},
 	year = {2002},
-	note = {OCLC: 49527610}
+	note = {OCLC: 49527610},
 }
 
 @article{reddi_decreasing_2014,
@@ -109,7 +221,7 @@
 	month = nov,
 	year = {2014},
 	note = {arXiv: 1406.2083},
-	keywords = {Computer Science - Information Theory, Computer Science - Machine Learning, Mathematics - Statistics Theory, Statistics - Machine Learning, Statistics - Methodology}
+	keywords = {Computer Science - Information Theory, Computer Science - Machine Learning, Mathematics - Statistics Theory, Statistics - Machine Learning, Statistics - Methodology},
 }
 
 @article{karlsson_corrigendum_2017,
@@ -125,7 +237,7 @@
 	author = {Karlsson, Sune},
 	month = nov,
 	year = {2017},
-	pages = {170--171}
+	pages = {170--171},
 }
 
 @book{brooks_handbook_2011,
@@ -139,7 +251,7 @@
 	editor = {Brooks, Steve and Gelman, Andrew and Jones, Galin and Meng, Xiao-Li},
 	month = may,
 	year = {2011},
-	doi = {10.1201/b10905}
+	doi = {10.1201/b10905},
 }
 
 @article{dedecker_new_2005,
@@ -149,7 +261,7 @@
 	journal = {Probability Theory and Related Fields},
 	author = {Dedecker, Jérôme and Prieur, Clémentine},
 	year = {2005},
-	pages = {203--236}
+	pages = {203--236},
 }
 
 @article{shao_dependent_2010,
@@ -165,7 +277,7 @@
 	author = {Shao, Xiaofeng},
 	month = mar,
 	year = {2010},
-	pages = {218--235}
+	pages = {218--235},
 }
 
 @article{jones_markov_2004,
@@ -180,7 +292,7 @@
 	journal = {Probability Surveys},
 	author = {Jones, Galin L.},
 	year = {2004},
-	pages = {299--320}
+	pages = {299--320},
 }
 
 @article{gelman_correction_2017,
@@ -196,7 +308,7 @@
 	author = {Gelman, Andrew},
 	month = oct,
 	year = {2017},
-	pages = {940--940}
+	pages = {940--940},
 }
 
 @article{cook_validation_2006,
@@ -212,7 +324,7 @@
 	author = {Cook, Samantha R and Gelman, Andrew and Rubin, Donald B},
 	month = sep,
 	year = {2006},
-	pages = {675--692}
+	pages = {675--692},
 }
 
 @article{talts_validating_2018,
@@ -225,7 +337,7 @@
 	month = apr,
 	year = {2018},
 	note = {arXiv: 1804.06788},
-	keywords = {Statistics - Methodology}
+	keywords = {Statistics - Methodology},
 }
 
 @inproceedings{christmann_universal_2010,
@@ -233,14 +345,14 @@
 	booktitle = {in {Advances} in {Neural} {Information} {Processing} {Systems}},
 	author = {Christmann, Andreas and Steinwart, Ingo},
 	year = {2010},
-	pages = {406--414}
+	pages = {406--414},
 }
 
 @inproceedings{gartner_graph_2003,
 	title = {On {Graph} {Kernels}: {Hardness} {Results} and {Efficient} {Alternatives}},
 	booktitle = {{COLT}},
 	author = {Gärtner, T. and Flach, Peter A. and Wrobel, S.},
-	year = {2003}
+	year = {2003},
 }
 
 @inproceedings{vishwanathan_fast_2006,
@@ -253,7 +365,7 @@
 	author = {Vishwanathan, S. V. N. and Borgwardt, Karsten M. and Schraudolph, Nicol N.},
 	year = {2006},
 	note = {event-place: Canada},
-	pages = {1449--1456}
+	pages = {1449--1456},
 }
 
 @article{siglidis_grakel_2020,
@@ -263,7 +375,7 @@
 	journal = {Journal of Machine Learning Research},
 	author = {Siglidis, Giannis and Nikolentzos, Giannis and Limnios, Stratis and Giatsidis, Christos and Skianis, Konstantinos and Vazirgiannis, Michalis},
 	year = {2020},
-	pages = {1--5}
+	pages = {1--5},
 }
 
 @book{steinwart_support_2008,
@@ -278,7 +390,7 @@
 	author = {Steinwart, Ingo and Christmann, Andreas},
 	year = {2008},
 	doi = {10.1007/978-0-387-77242-4},
-	note = {ISSN: 1613-9011}
+	note = {ISSN: 1613-9011},
 }
 
 @article{benjamini_controlling_1995,
@@ -295,7 +407,7 @@
 	author = {Benjamini, Yoav and Hochberg, Yosef},
 	month = jan,
 	year = {1995},
-	pages = {289--300}
+	pages = {289--300},
 }
 
 @article{konev_luminescence_1975,
@@ -311,7 +423,7 @@
 	year = {1975},
 	pmid = {95},
 	keywords = {Fibrinogen, Hydrogen-Ion Concentration, Molecular Conformation, Spectrometry, Fluorescence, Temperature},
-	pages = {586--590}
+	pages = {586--590},
 }
 
 @book{lehmann_testing_2005,
@@ -323,21 +435,7 @@
 	publisher = {Springer},
 	author = {Lehmann, E. L. and Romano, Joseph P.},
 	year = {2005},
-	keywords = {Statistical hypothesis testing}
-}
-
-@article{chwialkowski_wild_2016,
-	title = {A {Wild} {Bootstrap} for {Degenerate} {Kernel} {Tests}},
-	url = {http://arxiv.org/abs/1408.5404},
-	abstract = {A wild bootstrap method for nonparametric hypothesis tests based on kernel distribution embeddings is proposed. This bootstrap method is used to construct provably consistent tests that apply to random processes, for which the naive permutation-based bootstrap fails. It applies to a large group of kernel tests based on V-statistics, which are degenerate under the null hypothesis, and nondegenerate elsewhere. To illustrate this approach, we construct a two-sample test, an instantaneous independence test and a multiple lag independence test for time series. In experiments, the wild bootstrap gives strong performance on synthetic examples, on audio data, and in performance benchmarking for the Gibbs sampler. The code is available at https://github.com/kacperChwialkowski/ wildBootstrap.},
-	language = {en},
-	urldate = {2020-08-25},
-	journal = {arXiv:1408.5404 [stat]},
-	author = {Chwialkowski, Kacper and Sejdinovic, Dino and Gretton, Arthur},
-	month = sep,
-	year = {2016},
-	note = {arXiv: 1408.5404},
-	keywords = {62G10, Statistics - Machine Learning}
+	keywords = {Statistical hypothesis testing},
 }
 
 @inproceedings{fukumizu_kernel_2007,
@@ -351,7 +449,7 @@
 	author = {Fukumizu, Kenji and Gretton, Arthur and Sun, Xiaohai and Schölkopf, Bernhard},
 	year = {2007},
 	note = {event-place: Vancouver, British Columbia, Canada},
-	pages = {489--496}
+	pages = {489--496},
 }
 
 @book{casella_statistical_1990,
@@ -362,7 +460,7 @@
 	publisher = {Brooks/Cole Pub. Co},
 	author = {Casella, George and Berger, Roger L.},
 	year = {1990},
-	keywords = {Mathematical statistics, Probabilities}
+	keywords = {Mathematical statistics, Probabilities},
 }
 
 @techreport{geweke_evaluating_1991,
@@ -374,7 +472,7 @@
 	institution = {Federal Reserve Bank of Minneapolis},
 	author = {Geweke, John},
 	year = {1991},
-	keywords = {Sampling (Statistics)}
+	keywords = {Sampling (Statistics)},
 }
 
 @article{gelman_inference_1992,
@@ -390,7 +488,7 @@
 	author = {Gelman, Andrew and Rubin, Donald B.},
 	month = nov,
 	year = {1992},
-	pages = {457--472}
+	pages = {457--472},
 }
 
 @article{del_negro_time_2015,
@@ -407,7 +505,7 @@
 	author = {Del Negro, Marco and Primiceri, Giorgio E.},
 	month = oct,
 	year = {2015},
-	pages = {1342--1345}
+	pages = {1342--1345},
 }
 
 @article{green_reversible_1995,
@@ -422,7 +520,7 @@
 	journal = {Biometrika},
 	author = {Green, Peter J.},
 	year = {1995},
-	pages = {711--732}
+	pages = {711--732},
 }
 
 @article{metropolis_equation_1953,
@@ -438,7 +536,7 @@
 	author = {Metropolis, Nicholas and Rosenbluth, Arianna W. and Rosenbluth, Marshall N. and Teller, Augusta H. and Teller, Edward},
 	month = jun,
 	year = {1953},
-	pages = {1087--1092}
+	pages = {1087--1092},
 }
 
 @article{hastings_monte_1970,
@@ -454,7 +552,7 @@
 	author = {Hastings, W. K.},
 	month = apr,
 	year = {1970},
-	pages = {97--109}
+	pages = {97--109},
 }
 
 @article{kriege_survey_2020,
@@ -472,7 +570,7 @@
 	year = {2020},
 	note = {arXiv: 1903.11835},
 	keywords = {Computer Science - Machine Learning, Statistics - Machine Learning},
-	pages = {6}
+	pages = {6},
 }
 
 @article{geyer_practical_1992,
@@ -488,7 +586,7 @@
 	author = {Geyer, Charles J.},
 	month = nov,
 	year = {1992},
-	pages = {473--483}
+	pages = {473--483},
 }
 
 @book{priestley_spectral_1981,
@@ -499,7 +597,7 @@
 	publisher = {Academic Press},
 	author = {Priestley, M. B.},
 	year = {1981},
-	keywords = {Spectral theory (Mathematics), Time-series analysis}
+	keywords = {Spectral theory (Mathematics), Time-series analysis},
 }
 
 @book{dedecker_weak_2007,
@@ -513,7 +611,7 @@
 	publisher = {Springer},
 	editor = {Dedecker, Jérôme},
 	year = {2007},
-	keywords = {Dependence (Statistics), Random variables, Stochastic processes}
+	keywords = {Dependence (Statistics), Random variables, Stochastic processes},
 }
 
 @article{grosse_testing_2014,
@@ -527,7 +625,7 @@
 	month = dec,
 	year = {2014},
 	note = {arXiv: 1412.5218},
-	keywords = {Computer Science - Machine Learning, Computer Science - Software Engineering, Statistics - Machine Learning}
+	keywords = {Computer Science - Machine Learning, Computer Science - Software Engineering, Statistics - Machine Learning},
 }
 
 @article{leucht_dependent_2013,
@@ -543,7 +641,7 @@
 	author = {Leucht, Anne and Neumann, Michael H.},
 	month = may,
 	year = {2013},
-	pages = {257--280}
+	pages = {257--280},
 }
 
 @article{kuipers_uniform_2015,
@@ -562,7 +660,7 @@
 	year = {2015},
 	note = {arXiv: 1202.6590},
 	keywords = {Mathematics - Statistics Theory, Statistics - Computation, Statistics - Machine Learning},
-	pages = {227--242}
+	pages = {227--242},
 }
 
 @article{geweke_using_1999,
@@ -580,7 +678,7 @@
 	author = {Geweke, John},
 	month = jan,
 	year = {1999},
-	pages = {1--73}
+	pages = {1--73},
 }
 
 @article{grzegorczyk_improving_2008,
@@ -597,7 +695,7 @@
 	author = {Grzegorczyk, Marco and Husmeier, Dirk},
 	month = jun,
 	year = {2008},
-	pages = {265--305}
+	pages = {265--305},
 }
 
 @article{gretton_kernel_2012,
@@ -608,7 +706,7 @@
 	journal = {Journal of Machine Learning Research},
 	author = {Gretton, Arthur and Borgwardt, Karsten M. and Rasch, Malte J. and Schölkopf, Bernhard and Smola, Alexander},
 	year = {2012},
-	pages = {723--773}
+	pages = {723--773},
 }
 
 @article{sutherland_generative_2019,
@@ -622,7 +720,7 @@
 	month = jun,
 	year = {2019},
 	note = {arXiv: 1611.04488},
-	keywords = {Computer Science - Artificial Intelligence, Computer Science - Machine Learning, Computer Science - Neural and Evolutionary Computing, Statistics - Machine Learning, Statistics - Methodology}
+	keywords = {Computer Science - Artificial Intelligence, Computer Science - Machine Learning, Computer Science - Neural and Evolutionary Computing, Statistics - Machine Learning, Statistics - Methodology},
 }
 
 @article{madigan_bayesian_1995,
@@ -639,7 +737,7 @@
 	author = {Madigan, David and York, Jeremy and Allard, Denis},
 	month = aug,
 	year = {1995},
-	pages = {215}
+	pages = {215},
 }
 
 @article{chen_bayesian_2011,
@@ -656,7 +754,7 @@
 	author = {Chen, Xiaohui and Jane Wang, Z. and McKeown, Martin J.},
 	month = aug,
 	year = {2011},
-	pages = {1920--1932}
+	pages = {1920--1932},
 }
 
 @article{gandy_unit_2020,
@@ -670,7 +768,7 @@
 	month = jan,
 	year = {2020},
 	note = {arXiv: 2001.06465},
-	keywords = {Statistics - Computation, Statistics - Methodology}
+	keywords = {Statistics - Computation, Statistics - Methodology},
 }
 
 @article{geweke_getting_2004,
@@ -685,5 +783,168 @@
 	author = {Geweke, John},
 	year = {2004},
 	note = {Publisher: [American Statistical Association, Taylor \& Francis, Ltd.]},
-	pages = {799--804}
+	pages = {799--804},
 }
+
+@InProceedings{Gorham2017,
+  author    = {Jackson Gorham and Lester W. Mackey},
+  booktitle = {Proceedings of the 34th International Conference on Machine Learning, {ICML} 2017, Sydney, NSW, Australia, 6-11 August 2017},
+  title     = {Measuring Sample Quality with Kernels},
+  year      = {2017},
+  editor    = {Doina Precup and Yee Whye Teh},
+  pages     = {1292--1301},
+  publisher = {{PMLR}},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {70},
+  bibsource = {dblp computer science bibliography, https://dblp.org},
+  biburl    = {https://dblp.org/rec/conf/icml/GorhamM17.bib},
+  url       = {http://proceedings.mlr.press/v70/gorham17a.html},
+}
+
+@InProceedings{Liu2020,
+  author    = {Feng Liu and Wenkai Xu and Jie Lu and Guangquan Zhang and Arthur Gretton and Danica J. Sutherland},
+  booktitle = {Proceedings of the 37th International Conference on Machine Learning, {ICML} 2020, 13-18 July 2020, Virtual Event},
+  title     = {Learning Deep Kernels for Non-Parametric Two-Sample Tests},
+  year      = {2020},
+  pages     = {6316--6326},
+  publisher = {{PMLR}},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {119},
+  bibsource = {dblp computer science bibliography, https://dblp.org},
+  biburl    = {https://dblp.org/rec/conf/icml/LiuXL0GS20.bib},
+  url       = {http://proceedings.mlr.press/v119/liu20m.html},
+}
+
+@InProceedings{Gretton2012,
+  author    = {Arthur Gretton and Bharath K. Sriperumbudur and Dino Sejdinovic and Heiko Strathmann and Sivaraman Balakrishnan and Massimiliano Pontil and Kenji Fukumizu},
+  booktitle = {Advances in Neural Information Processing Systems 25: 26th Annual Conference on Neural Information Processing Systems 2012. Proceedings of a meeting held December 3-6, 2012, Lake Tahoe, Nevada, United States},
+  title     = {Optimal kernel choice for large-scale two-sample tests},
+  year      = {2012},
+  editor    = {Peter L. Bartlett and Fernando C. N. Pereira and Christopher J. C. Burges and L{\'{e}}on Bottou and Kilian Q. Weinberger},
+  pages     = {1214--1222},
+  bibsource = {dblp computer science bibliography, https://dblp.org},
+  biburl    = {https://dblp.org/rec/conf/nips/GrettonSSSBPF12.bib},
+  url       = {https://proceedings.neurips.cc/paper/2012/hash/dbe272bab69f8e13f14b405e038deb64-Abstract.html},
+}
+
+@InProceedings{Sutherland2017,
+  author    = {Danica J. Sutherland and Hsiao{-}Yu Tung and Heiko Strathmann and Soumyajit De and Aaditya Ramdas and Alexander J. Smola and Arthur Gretton},
+  booktitle = {5th International Conference on Learning Representations, {ICLR} 2017, Toulon, France, April 24-26, 2017, Conference Track Proceedings},
+  title     = {Generative Models and Model Criticism via Optimized Maximum Mean Discrepancy},
+  year      = {2017},
+  publisher = {OpenReview.net},
+  bibsource = {dblp computer science bibliography, https://dblp.org},
+  biburl    = {https://dblp.org/rec/conf/iclr/SutherlandTSDRS17.bib},
+  url       = {https://openreview.net/forum?id=HJWHIKqgl},
+}
+
+
+@InProceedings{chwialkowski_wild_2014,
+  author    = {Chwialkowski, Kacper P and Sejdinovic, Dino and Gretton, Arthur},
+  booktitle = {Advances in Neural Information Processing Systems},
+  title     = {A Wild Bootstrap for Degenerate Kernel Tests},
+  year      = {2014},
+  editor    = {Z. Ghahramani and M. Welling and C. Cortes and N. Lawrence and K. Q. Weinberger},
+  publisher = {Curran Associates, Inc.},
+  volume    = {27},
+  url       = {https://proceedings.neurips.cc/paper/2014/file/13168e6a2e6c84b4b7de9390c0ef5ec5-Paper.pdf},
+}
+
+@InProceedings{Chwialkowski2016,
+  author    = {Kacper Chwialkowski and Heiko Strathmann and Arthur Gretton},
+  booktitle = {Proceedings of the 33nd International Conference on Machine Learning, {ICML} 2016, New York City, NY, USA, June 19-24, 2016},
+  title     = {A Kernel Test of Goodness of Fit},
+  year      = {2016},
+  editor    = {Maria{-}Florina Balcan and Kilian Q. Weinberger},
+  pages     = {2606--2615},
+  publisher = {JMLR.org},
+  series    = {{JMLR} Workshop and Conference Proceedings},
+  volume    = {48},
+  bibsource = {dblp computer science bibliography, https://dblp.org},
+  biburl    = {https://dblp.org/rec/conf/icml/ChwialkowskiSG16.bib},
+  url       = {http://proceedings.mlr.press/v48/chwialkowski16.html},
+}
+
+@InProceedings{Liu2016,
+  author    = {Qiang Liu and Jason D. Lee and Michael I. Jordan},
+  booktitle = {Proceedings of the 33nd International Conference on Machine Learning, {ICML} 2016, New York City, NY, USA, June 19-24, 2016},
+  title     = {A Kernelized Stein Discrepancy for Goodness-of-fit Tests},
+  year      = {2016},
+  editor    = {Maria{-}Florina Balcan and Kilian Q. Weinberger},
+  pages     = {276--284},
+  publisher = {JMLR.org},
+  series    = {{JMLR} Workshop and Conference Proceedings},
+  volume    = {48},
+  bibsource = {dblp computer science bibliography, https://dblp.org},
+  biburl    = {https://dblp.org/rec/conf/icml/LiuLJ16.bib},
+  url       = {http://proceedings.mlr.press/v48/liub16.html},
+}
+
+@InProceedings{Jitkrittum2017,
+  author    = {Wittawat Jitkrittum and Wenkai Xu and Zolt{\'{a}}n Szab{\'{o}} and Kenji Fukumizu and Arthur Gretton},
+  booktitle = {Advances in Neural Information Processing Systems 30: Annual Conference on Neural Information Processing Systems 2017, December 4-9, 2017, Long Beach, CA, {USA}},
+  title     = {A Linear-Time Kernel Goodness-of-Fit Test},
+  year      = {2017},
+  editor    = {Isabelle Guyon and Ulrike von Luxburg and Samy Bengio and Hanna M. Wallach and Rob Fergus and S. V. N. Vishwanathan and Roman Garnett},
+  pages     = {262--271},
+  bibsource = {dblp computer science bibliography, https://dblp.org},
+  biburl    = {https://dblp.org/rec/conf/nips/JitkrittumX0FG17.bib},
+  url       = {https://proceedings.neurips.cc/paper/2017/hash/979d472a84804b9f647bc185a877a8b5-Abstract.html},
+}
+
+@Article{Hoeffding1948,
+  author   = {Hoeffding, Wassily},
+  journal  = {Annals of Mathematical Statistics},
+  title    = {A class of statistics with asymptotically normal distribution},
+  year     = {1948},
+  issn     = {0003-4851},
+  pages    = {293--325},
+  volume   = {19},
+  doi      = {10.1214/aoms/1177730196},
+  keywords = {62.0X},
+  mrnumber = {26294},
+}
+
+@Article{Mises1947asymptotic,
+  author    = {Richard von Mises},
+  journal   = {Annals of Mathematical Statistics},
+  title     = {On the asymptotic distribution of differentiable statistical functions},
+  year      = {1947},
+  issn      = {0003-4851},
+  month     = {sep},
+  number    = {3},
+  pages     = {309--348},
+  volume    = {18},
+  doi       = {10.1214/aoms/1177730385},
+  mrnumber  = {22330},
+  publisher = {Institute of Mathematical Statistics},
+}
+
+@inproceedings{NIPS2007_3a077244,
+ author = {Fukumizu, Kenji and Gretton, Arthur and Sun, Xiaohai and Sch\"{o}lkopf, Bernhard},
+ booktitle = {Advances in Neural Information Processing Systems},
+ editor = {J. Platt and D. Koller and Y. Singer and S. Roweis},
+ pages = {},
+ publisher = {Curran Associates, Inc.},
+ title = {Kernel Measures of Conditional Dependence},
+ url = {https://proceedings.neurips.cc/paper/2007/file/3a0772443a0739141292a5429b952fe6-Paper.pdf},
+ volume = {20},
+ year = {2008}
+}
+
+@Book{Vaart_1998,
+  author    = {A. W. van der Vaart},
+  publisher = {Cambridge University Press},
+  title     = {Asymptotic Statistics},
+  year      = {1998},
+  isbn      = {0-521-49603-9; 0-521-78450-6},
+  month     = {oct},
+  series    = {Cambridge Series in Statistical and Probabilistic Mathematics},
+  volume    = {3},
+  doi       = {10.1017/cbo9780511802256},
+  keywords  = {62-02 (62E20 62F05 62F12 62G07 62G09 62G20)},
+  mrnumber  = {1652247},
+  pages     = {xvi+443},
+}
+
+@Comment{jabref-meta: databaseType:bibtex;}

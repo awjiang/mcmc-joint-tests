@@ -1,0 +1,112 @@
+\section{The idea}
+\hksay{This section might be better suited for intro. There's substantial overlap. The technical detail of the Geweke test can be moved to the related work section or in the experiment.}
+A major challenge in validating an approximate posterior sampler such as MCMC is that we do not have the information about the target distribution; 
+the form of the posterior is typically unknown, and quantities characterizing the distribution (e.g., mean and variance) are unavailable (this is why we make approximation in the first place).
+
+The ingenious idea proposed by \cite{geweke_getting_2004} is to examine a consistency property that the true posterior distribution should satisfy. 
+A Bayesian model defined by a likelihood $p(y\given \theta)$ and a prior $\pi(\theta)$ defines a joint distribution of $y$ and $\theta$, which admits the factorizations: 
+\[p(y\given \theta) \pi(\theta) = \pi(\theta\given y) p(y).\]
+% \hksay{In terms of the notation, it might be good to differentiate the samples from the two joints. For the forward sample, we could use the vanilla $\theta, y$ and for the backward sample, maybe $\tilde{\theta}, \tilde{y}$. This allows us to write in terms of the laws: i.e., we don't need to use the density notation, perhaps. Regardless of using the density function, it's neat to differentiate the samples.}
+Thus, a tractable alternative $\tilde{\pi}(\theta\given y)$ to the posterior should satisfy 
+\[p(y\given \theta) \pi(\theta) = \tilde{\pi}(\theta\given y) p(y).\]
+Importantly, this relation can be empirically tested.
+Let us call the former factorization the forward joint and the latter the backward joint. The forward joint may be sampled from via $\theta_{i} \sim p(\theta), y_{i} \sim p(y|\theta_{i})$; we refer to this as the marginal-conditional (MC) algorithm. Two sampling algorithms for the backward joint are given in Table \ref{tab:sampling}. If $\tilde{\pi}(\theta\given y)$ is correct, the forward and backward joints should be statistically indistinguishable. Geweke's approach tests for the equality of a finite collection of test function means across both distributions. This, however, will be unable to detect errors in the posterior sampler that lead to discrepancies outside of the given test functions; for example, in higher moments or the dependency between $y$ and $\theta$. Two examples of such errors are given in our Experiment 1 in Section ***.
+This shortcoming motivates our test: we provide a more stringent test with the MMD two-sample test \citep{gretton_kernel_2012}, which is nonparametric test and does not require such manual specification of test functions. 
+
+\begin{table}
+    \caption{Backward Joint Sampling Algorithms}
+    \label{tab:sampling}
+    \centering
+    \begin{tabular}{l|l}
+    \toprule
+        Successive-conditional (SC) & Backward-conditional (BC) \\
+    \midrule  
+    
+    Initialize $\theta_{0} \sim p(\theta)$                                      & Repeat: $\theta_{0} \sim p(\theta), y_{i} \sim p(y|\theta_{0})$ \\
+    Repeat: $y_{l} \sim p(y|\theta_{l-1}), \theta_{l} \sim q(\theta|y_{l-1})$   & \qquad $\theta_{l} \sim q(\theta|y_{i})$ for $l=1,...L$ \\
+    Keep every $j^{\text{th}}$ sample $(y_{l}, \theta_{l})$                     & \qquad Keep $(y_{i}, \theta_{L})$ \\
+    \bottomrule
+    \end{tabular}
+\end{table}
+
+% Geweke implements this idea by comparing (estimates of) the expectations of hand-picked \emph{test functions} under both the forward and backward joints. 
+% Let $g: \mathcal{Y}\times \Theta\to \mathbb{R}$ be a function; we compare the two joint distributions by its expectations. 
+% Let  $\{(y_i, \theta_i)\}_{i=1}^n$ be samples from the forward joint and $\{(\tilde{y}_i, \tilde{\theta}_i)\}_{i=1}^n$ ones from the backward joint.
+% Then, the z-score
+% % $\sqrt{n}(\hat{\bar{g}} - \hat{\tilde{g}})/\sqrt{\hat{\sigma^{2}}+\hat{\tilde{\sigma}}^{2}}$
+% \begin{equation}
+%     \frac{\hat{\bar{g}}(y, \theta) - \hat{\bar{g}}(\tilde{y}, \tilde{\theta})}{\sqrt{ \frac{\hat{\sigma}^{2}}{N} + \frac{\hat{\tilde{\sigma}}^{2}}{N}}} 
+%     % \xrightarrow[]{d} \mathcal{N}(0, 1)
+%     \label{eq:geweke}
+% \end{equation}
+% asymptotically follows the standard Gaussian if $\tilde{\pi}(\theta\given y)=\pi(\theta\given y)$, where $\hat{\bar{g}}(y,\theta) = \frac{1}{N}\sum_{n=1}^{N}g(y_{n},\theta_{n})$ and $\hat{\sigma}, \hat{\tilde{\sigma}}$ are estimated variances.
+% The width of the window estimator for $\hat{\tilde{\sigma}}$ can be set to account for the serial dependence in the RHS samples.
+% This forms the basis of a corresponding z-test. 
+
+% Geweke uses all first and second empirical moments of the sampled parameters $\theta$ as test functions. If any of the test functions fail their tests, the null hypothesis that the joints are the same is rejected.
+
+% with the mean estimates
+% \begin{align*}
+%     \hat{\bar{g}}_{MC} = \frac{1}{N_{MC}}\sum_{n=1}^{N_{MC}}g_{MC}^{(n)}, \qquad \hat{\bar{g}}_{SC} = \frac{1}{N_{SC}}\sum_{n=1}^{N_{SC}}g_{SC}^{(n)}
+% \end{align*}
+% The variance estimates
+% \begin{align*}
+%     \hat{\sigma}_{MC}^{2} = \frac{1}{N_{MC}}\sum_{n=1}^{N_{MC}}(g_{MC}^{(n)} - \hat{\bar{g}}_{MC})^{2}
+% \end{align*}
+% \begin{align*}
+%     \hat{\sigma}_{SC}^{2} &= \frac{1}{N_{SC}}\sum_{t=-\infty}^{\infty} w(t) \hat{\gamma}(t) \\
+%     \hat{\gamma}(t) &= \hat{\gamma}(-t) = \frac{1}{N_{SC}}\sum_{i=1}^{N_{SC}-t}(g_{SC}^{i} - \hat{\bar{g}}_{SC})(g_{SC}^{i+t} - \hat{\bar{g}}_{SC}) \\
+%     w(t) &= \max{\left(\frac{L-|t|}{L}, 0\right)}, \quad L \in \{0.04, 0.08, 0.15\} \times N
+% \end{align*}
+\section{Background: MMD two-sample test \citep{gretton_kernel_2012}}
+% \subsection{Kernels and Maximum Mean Discrepancy}
+% Our tests are based on the Maximum Mean Discrepancy (MMD) \citep{gretton_kernel_2012}
+Let us consider two distributions $P, \tilde{P}$ defined on a metric space $\mathcal{X}$, and samples from the respective distributions $\{X_i\}_{i=1}^{n}\sim P$,  $\{\tilde{X}_i\}_{i=1}^{n} \sim \tilde{P}$. 
+A two-sample test determines if the distributions are identical based on the samples; 
+the null hypothesis is given as $H_0: P=\tilde{P}$, and the alternative is $H_1: P\neq \tilde{P}$.
+The MMD two-sample test proposed by \cite{gretton_kernel_2012} is based on the maximum mean discrepancy, a distance on probability measures.
+
+The MMD is defined as the maximum discrepancy with respect to the expectations of \emph{test functions}:
+\begin{align}
+    \mathrm{MMD}(P, \tilde{P})&\coloneqq\sup_{h \in B_1(\mathcal{H}_k)} \{\E_{X\sim P}[h(X)]-\E_{\tilde{X}\sim \tilde{P}}[h(\tilde{X})]\}.
+\label{eq:mmd}
+\end{align}
+Here, $B_1(\mathcal{H}_k)$ denotes the the unit-ball of the reproducing kernel Hilbert space (RKHS) \citep{} defined by positive-definite kernel $k: \mathcal{X}\times\mathcal{X} \to \mathbb{R}$.
+The MMD is known to separate probability distributions (i.e., $\mathrm{MMD}(P,Q) = 0$ iff $P=Q$) for a class of kernel functions called characteristic kernels \citep{}. 
+Examples of such kernel are the Gaussian kernel $k(x,x')=\exp(-\lVert x-x' \rVert_2^2/\sigma^2)$ with $\sigma>0$, and the inverse multiquadratic (IMQ) kernel $k(x,x')= (c^2+\lVert x-x' \rVert_2^2)^{\beta}$ with $beta<0, c>0$. 
+Notably, the choice of RKHS as a test function class yields the following explicit form without the need of optimization 
+\begin{align}
+    \mathrm{MMD}^2(P, \tilde{P})&=\E_{}[k(X_1, X_2)]-2\E_{}[k(X_1, \tilde{X}_1)] + \E_{}[k(\tilde{X}_1, \tilde{X}_2)]\label{eq:mmd2}
+\end{align}
+where $X_1, X_2$ (or $\tilde{X}_1, \tilde{X}_2$) are independent and identically distributed (i.i.d.) according to $P$ (or $\tilde{P}$), and $X_1$ and $\tilde{X}_1$ are independent. 
+
+The form in \eqref{eq:mmd2} allows estimation with samples. 
+In particular, we can consider the following estimators, 
+\begin{align}
+        \widehat{\mathrm{MMD}}_{V}^{2} &= \frac{1}{N_{x}^{2}} \sum_{i=1}^{N_{x}} \sum_{j=1}^{N_{x}} k\left(x_{i}, x_{j}\right)+\frac{1}{N_{y}^{2}} \sum_{i=1}^{N_{y}} \sum_{j=1}^{N_{y}} k\left(y_{i}, y_{j}\right)
+        -\frac{2}{N_{x} N_{y}} \sum_{i=1}^{N_{x}} \sum_{j=1}^{N_{y}} k\left(x_{i}, y_{j}\right), \label{eq:mmd_biased}\\
+    \widehat{\mathrm{MMD}}_{U}^{2} &= \frac{1}{{N_{x}\choose 2}} \sum_{i = 1}^{N_{x}} \sum_{i \neq i'}^{N_{x}} k\left(x_{i}, x_{i'}\right)+\frac{1}{{N_{y}\choose 2}} \sum_{j = 1}^{N_{y}} \sum_{j \neq j'}^{N_{y}} k\left(y_{j}, y_{j'}\right)-\frac{2}{N_{x}N_{y}} \sum_{i = 1}^{N_{x}} \sum_{j = 1}^{N_{y}} k\left(x_{i}, y_{j}\right),  \label{eq:mmd_unbiased}\\
+\end{align}
+which are, respectively, a V-statistic \citep{} and a U-statistic \citep{}.
+
+We aim to reject the null hypothesis if a statistic $T_n$ (either of the above estimators) is sufficiently large. 
+In doing so, we need to control the type-I error (i.e., the probability of falsely rejecting the null) by designing an appropriate threshold $c_{\alpha, n}$ such that the probability is bounded as $\mathrm{Prob} (T_n > c_{\alpha, n}\given H_0)\leq \alpha$ for a given significance level $\alpha \in (0,1)$.
+If the samples are i.i.d., we can simulate the distribution under the null $P=Q$ by repeatedly permuting the samples and taking as the test threshold the $1-\alpha$ empirical quantile of the bootstrapped statistics \citep{gretton_kernel_2012}. 
+When the samples are not i.i.d., as in the case of Markov chains, the permutation bootstrap is inappropriate because it breaks the independence between observations.
+\cite{chwialkowski_wild_2016} provide a general procedure for simulating the null distribution correlated samples, specifically for samples satisfying $\tau$-mixing. 
+We can simulate the null distribution by drawing the wild-bootstrapped MMD
+\begin{equation}
+\begin{array}{c}
+\widehat{\mathrm{MMD}}^{2}_{V, b}=\frac{1}{N_{x}^{2}} \sum_{i=1}^{N_{x}} \sum_{j=1}^{N_{x}} W_{i}^{(x)} W_{j}^{(x)} k\left(X_{i}, X_{j}\right)+\frac{1}{N_{y}^{2}} \sum_{i=1}^{N_{y}} \sum_{j=1}^{N_{y}} W_{i}^{(y)} W_{j}^{(y)} k\left(Y_{i}, Y_{j}\right) \\
+\quad-\frac{2}{N_{x} N_{y}} \sum_{i=1}^{n_{s}} \sum_{j=1}^{N_{y}} W_{i}^{(x)} W_{j}^{(y)} k\left(X_{i}, Y_{j}\right)
+\end{array}
+\label{eq:wb_mmd}
+\end{equation}
+where $W_{i}$ is the wild bootstrap process $    W_{t}=\exp{\left(-\frac{1}{l}\right)} W_{t-1}+\sqrt{1-\exp{\left(-\frac{2}{l}\right)}} \epsilon_{t}$,
+% \begin{equation}
+%     W_{t}=\exp{\left(-\frac{1}{l}\right)} W_{t-1}+\sqrt{1-\exp{\left(-\frac{2}{l}\right)}} \epsilon_{t}
+%     \label{eq:wb_process}
+% \end{equation}
+with $W_{0} \sim \mathcal{N}(0,1)$ and $\epsilon_{t} \sim \mathcal{N}(0,1)$ \citep{leucht_dependent_2013, chwialkowski_wild_2016}.
+Importantly, the MMD test is consistent in power against a fixed alternative; i.e., the type-II error (the probability of failing to rejecting the null when the alternative is true) converges to zero as the sample size increases.
+
