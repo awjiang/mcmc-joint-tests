@@ -6,13 +6,13 @@
 
 % ready for submission
 
-\PassOptionsToPackage{numbers, square}{natbib}
+\PassOptionsToPackage{numbers, square, sort&compress}{natbib}
 \usepackage{neurips_2021}
 
 % to compile a preprint version, e.g., for submission to arXiv, add add the
 % [preprint] option:
 %     \usepackage[preprint]{neurips_2021}
-
+% https://www.overleaf.com/project/5f05abd2e41db100011026fc
 % to compile a camera-ready version, add the [final] option, e.g.:https://www.overleaf.com/project/5f05abd2e41db100011026fc
 %     \usepackage[final]{neurips_2021}
 
@@ -61,7 +61,7 @@
 \def \set#1{\{#1\} }
 
 \newcommand{\E}{\mathbb{E}}
-\newcommand{\var}{\mathrm{Var}}
+\renewcommand{\var}{\mathrm{Var}}
 \newcommand{\cov}{\mathrm{Cov}}
 \newcommand{\KL}{\mathrm{KL}}
 \newcommand{\neighb}{\text{ne}}
@@ -78,7 +78,9 @@
 \global\long\def\given{\vert}%
 \bibliographystyle{apalike}
 
-\title{Kernel Tests for Markov Chain Monte Carlo}
+\title{
+    Nonparametric diagnostics for MCMC implementations: revisiting Geweke's test
+}
 
 % The \author macro works with any number of authors. There are two commands
 % used to separate the names and addresses of multiple authors: \And and \AND.
@@ -123,13 +125,13 @@
 
 \maketitle
 
+\iffalse
 \begin{abstract}
     The Geweke diagnostic is a popular technique that assesses whether a Markov chain
-  algorithm samples a posterior correctly: It
+  algorithm samples a posterior correctly: it
   generates samples from a joint distribution in two ways,
   one that involves the sampler and one that does not, and compares
   the two using a hypothesis test. 
-%   It is popular with practitioners,
   It can in principle detect any type of error---lack of
   convergence, but also implementation errors, derivation errors, or
   insufficient lag. A practical limitation is the requisite
@@ -143,70 +145,103 @@
   optimization, can be applied on any domain by plugging in a suitable
   kernel, and lets users draw on a large arsenal of established
   results to select a kernel. 
-%   and interpret outcomes. 
   In experiments, we showcase its performance on a variety of problems involving plausible implementation mistakes.
 %   We demonstrate its performance on non-Euclidean domains,
 %   such as graphs, and show that it performs competitively even in the Euclidean case, albeit at
 %   higher computational cost than some available alternatives.
 \end{abstract}
+\fi
+% \begin{abstract}
+%     The Geweke diagnostic is a popular technique that assesses whether a Markov chain
+%   algorithm samples a posterior correctly: it
+%   generates samples from a joint distribution in two ways,
+%   one that involves the sampler and one that does not, and compares
+%   the two using a two-sample hypothesis test. 
+%   The test detects a wide variety of errors:
+%   lack of
+%   convergence, implementation errors, derivation errors, or
+%   insufficient lag.
+%   Implementations of  the two-sample test have generally required
+%   user-designed test statistics, making them challenging to generalize to modern ML settings with complex, structured variables,
+%   such as strings and graphs.
+%   We cast the test statistic as a sample  estimate of a probability metric, which we implement as a maximum mean discrepancy (MMD).
+% The resulting nonparametric test statistic is defined via a reproducing kernel, and we can draw on a  large arsenal of established  results for kernel choice.
+%   In experiments, we showcase test performance on a variety of problems involving plausible implementation mistakes.
+% \end{abstract}  
+
+\begin{abstract}
+The Geweke diagnostic is a popular technique that assesses whether a Markov chain
+  algorithm samples a posterior correctly: it
+  generates samples from a joint distribution in two ways,
+  one that involves the sampler and one that does not, and compares
+  the two using a two-sample hypothesis test. 
+  The test detects a variety of errors: lack of
+  convergence, but also mistakes in implementation or derivation.
+  However, it requires the user to hand-craft a set of test statistics, which makes it 
+  challenging to apply to all but the simplest models.
+%   However, it relies on
+%   user-designed test statistics, making it challenging to generalize to modern machine learning settings with complex, structured variables
+%   such as strings and graphs.
+  We cast the test statistic as a sample estimate of a probability metric, which we implement as a maximum mean discrepancy (MMD).
+The resulting test is nonparametric, its test statistic can be evaluated via a reproducing kernel, and the user can draw on a large arsenal of established results to choose an appropriate kernel for the setting.
+  In experiments, we showcase test performance on a variety of problems involving plausible implementation mistakes.
+\end{abstract}  
+
 
 \section{Introduction}
 \label{section:intro}
 
 Consider an unobserved
 random variable $\Theta$ (a Bayesian model parameter, or a latent variable)
-an observed random variable $X$, and a task involving the
-posterior distribution of $\Theta$ given $X$. If the posterior cannot
+an observed random variable $Y$, and a task involving the
+posterior distribution of $\Theta$ given $Y$. If the posterior cannot
 be calculated analytically, Markov chain Monte Carlo sampling
 (MCMC) is often the method of choice.
-The Geweke diagnostic \cite{geweke_getting_2004} attempts to determine
-whether the algorithm generates samples from the correct distribution.
-That is not quite the same as a convergence diagnostic: The posterior
-may be incorrect because the sampler has not yet converged---which is
-what a convergence diagnostic tries to rule out---but also for a
-variety of other reasons, such as 
-implementation mistakes, errors or wrong assumptions in the
-derivation, or because samples are collected from the chain too
-frequently and introduce sequential dependence.
-We refer to \citep{Robert:Casella} for more on MCMC, and on
-convergence diagnostics.
+The Geweke diagnostic attempts to determine
+whether the algorithm generates samples from the correct distribution
+\cite{geweke_getting_2004}.
+The goal is to detect errors from any source, including 
+implementation mistakes, wrong assumptions in the
+derivation, or sequential dependence induced by collecting samples from the chain too
+frequently.
+That is not quite the same as a convergence diagnostic \citep[see e.g.][]{robert_short_2011}, which tests whether
+sampler has converged to its stationary distribution, but assumes the sampler itself
+is correct.
 
 Geweke's approach is simple and ingenious:
 Assume a model with 
-likelihood $p(x|\theta)$, prior density $\pi(\theta)$, and posterior
-$\pi(\theta|x)$. The MCMC algorithm generates samples from an
-approximate posterior $\tilde{\pi}(\theta|x)$. Our goal is to 
-determine whether whether $\tilde{\pi}(\theta|x)=\pi(\theta|x)$. 
-Since $p(x|\theta)$ and $\pi(\theta)$ are known, one can generate
-samples from the exact joint distribution of $(X,\Theta)$ as
-\begin{equation*}
+likelihood $p(y|\theta)$, prior density $\pi(\theta)$, and posterior
+$\pi(\theta|y)$. The MCMC algorithm generates samples from an
+approximate posterior $\tilde{\pi}(\theta|y)$. Our goal is to 
+determine whether $\tilde{\pi}(\theta|y)=\pi(\theta|y)$. 
+Since $p(y|\theta)$ and $\pi(\theta)$ are known, one can generate
+samples from the exact joint distribution of $(Y,\Theta)$ as
+\begin{equation}
   \Theta_i\sim \pi
   \quad\text{ and }\quad
-  X_i\sim(\argdot|\Theta_i)\quad\text{ for }i=1,\ldots,n\;.
-\end{equation*}
+  Y_i\sim p(\argdot|\Theta_i)\quad\text{ for }i=1,\ldots,n\;.
+  \label{eq:ancestralsampling}
+\end{equation}
 Call this the \emph{forward factorization} of the joint distribution.
 Alternatively, one can use the \emph{backward factorization}
 \begin{equation*}
-  X'_i\sim p(\argdot)=\int p(\argdot|\theta)\pi(\theta)d\theta
+  Y'_i\sim p(\argdot)=\int p(\argdot|\theta)\pi(\theta)d\theta
   \quad\text{ and }\quad
-  \Theta'_i\sim\tilde{\pi}(\argdot|X'_i)\;.
+  \Theta'_i\sim\tilde{\pi}(\argdot|Y'_i)\;.
 \end{equation*}
-(Note $X'_i$ can be generated by drawing a pair, say $(X_i',\Theta_i'')$, from the forward joint,
-and discarding $\Theta_i''$.) The sampler is correct if (and only if) ${(X_1,\Theta_1),\ldots,(X_n,\Theta_n)}$
-and ${(X_1',\Theta_1'),\ldots,(X_n',\Theta_n')}$ have the same
-distribution. Whether that is the case is determined using a
-hypothesis test.
+(Note $Y'_i$ can be generated by drawing a pair, say $(Y_i',\Theta_i'')$, from the forward joint,
+and discarding $\Theta_i''$.) The sampler is correct if, and only if, $\{(Y_1,\Theta_1),\ldots,(Y_n,\Theta_n)\}$
+and $\{(Y_1',\Theta_1'),\ldots,(Y_n',\Theta_n')\}$ have the same distribution; 
+% Whether that is the case is determined using a
+the query is answered using a hypothesis test.
 
 There is no free lunch: The approximate posterior
-$\tilde{\pi}(\argdot|X_i)$ in the backward factorization
+$\tilde{\pi}(\argdot|Y_i)$ in the backward factorization
 is represented by the sampler, which must burn in for \emph{each}
-value of $X_i$, so arguably, properly using the diagnostic requires a
-diagnostic. Letting the sampler burn in separately for each $X_i$ is
-costly; starting with a previous value in the hope of reducing burn-in
-is possible, but turns the diagnostic as a whole into a Markov chain
-(and technically speaking into a Gibbs sampler), which must converge.
-See Section \ref{related:work} for references on the problem, and on
-mitigation strategies.
+value of $Y_i$. Such separate burn-ins are costly; starting with a previous value to reduce time spent in burn-in (as proposed by \cite{geweke_getting_2004}) is possible, 
+but turns the diagnostic as a whole into a Markov chain,
+ which in turn must converge, as pointed by \citet{talts_validating_2018}.
+% See Section \ref{related:work} for references on the problem, and on mitigation strategies.
 Nonetheless, Geweke's method has proven useful in practice, and can pick up
 on suprisingly subtle mistakes.
 It has been invoked, for example, by \citet{del_negro_time_2015} and
@@ -215,13 +250,13 @@ algorithms in the econometrics literature, over a decade after their
 initial publications.
 As noted by \citet{grosse_testing_2014}, one may easily check that each of the sampler's steps preserves detailed balance, but a few errors may still slip through. 
 In our own experience, it is often the detection of coding-,
-derivation-, and other forms of ``human error'' where the Geweke diagnostic really
+derivation-, and other ``human'' errors where the Geweke diagnostic really
 shines, and we would argue that it should be used as a complement to
 mixing diagnostics, not as a replacement.
 
-\textcolor{red}{remainder of section 1: One (short) paragraph
-  summarizing what we do}
-
+% \textcolor{red}{remainder of section 1: One (short) paragraph
+%   summarizing what we do}
+In the following, we generalize Geweke's approach by framing it in terms of distance between joint distributions. We discuss a suitable distance, Maximum Mean Discrepancy (MMD), that makes it applicable with minimal user effort whenever a kernel is available for the given problem domain. We combine MMD with two joint sampling methods, yielding two MCMC diagnostic tests, and demonstrate their efficacy relative to the Geweke test and more recent benchmarks in several experiments.
 
 % % Markov chain Monte Carlo (MCMC) is an indispensable tool in modern Bayesian analysis, where a great majority of models have intractable posteriors and require simulation.
 % Suppose we are faced with a Bayesian inference problem. 
@@ -247,11 +282,12 @@ mixing diagnostics, not as a replacement.
 
 % We address this shortcoming by introducing two two-sample tests based on Maximum Mean Discrepancy \citep{gretton_kernel_2012} that can be viewed as kernel-based extensions of the Geweke test and other methods. The tests are nonparametric and do not require manual specification of test functions; given the right kernel, they can detect any error in an MCMC algorithm. The tests perform competitively with existing alternatives in a variety of settings, though they are quadratic in the number of samples compared to linear or log-linear for alternative tests. We show that kernel choice and the inclusion of hand-picked features relevant to MCMC can dramatically improve test power. In addition, the MMD tests more easily generalize to domains other than the Euclidean space $\mathbb{R}^{d}$ ($d\geq 1)$. We hope they will enable researchers to be more confident in publishing their own results as well as building on existing ones.
 
-\section{Background: the MMD two-sample test (AND Geweke test...?)} 
+\section{Background: the Geweke Test and MMD}\label{sec:background}
 
 To implement the Geweke test, one has to decide whether samples from the forward
-and backward joints follow the same distribution. That is usually done as
-follows: Consider more generally two 
+and backward joints follow the same distribution. 
+That is usually done as follows: 
+Consider more generally two 
 random quantities $X$ and $Z$, with distributions $P$ and $Q$.
 Given i.i.d.\ samples
 ${X_1,\ldots,X_n\sim P}$ and ${Z_1,\ldots,Z_n\sim Q}$, we must decide
@@ -264,9 +300,9 @@ function $f$ as
   \hat{\mathbb{E}}[f(Z)]\;:=\;\frac{1}{n}\sum_{i\leq n}f(Z_i)\;.
 \end{equation*}
 To compare distributions, choose a list of real-valued test functions
-${t_1,\ldots,t_k}$, and define
+${f_1,\ldots,f_m}$, and define
 \begin{equation*}
-  T_{\text{max}}\;:=\;\max_{j\leq k}|\hat{\mathbb{E}}[t_j(X)]-\hat{\mathbb{E}}[t_j(Z)]|\;.
+  T_{\text{max}}\;:=\;\max_{j\leq m}|\hat{\mathbb{E}}[f_j(X)]-\hat{\mathbb{E}}[f_j(Z)]|\;.
 \end{equation*}
 Given an accuracy ${c>0}$, distributions are then compared 
 according to the rule
@@ -276,68 +312,66 @@ according to the rule
   T_{\text{max}}\geq c\;.
 \end{equation*}
 \citet{geweke_getting_2004}, for example, chooses the functions
-$t_j$ such that their expectations are first and second moments (where
+$f_j$ such that their expectations are first and second moments (where
 the covariance matrix is approximated by a few leading eigenvalues).
 In the parlance of statistics, the procedure above is a two-sample
 hypothesis test, with test statistic $T_{\text{max}}$, null hypothesis
 ${P=Q}$, and alternative ${P\neq Q}$. The choice of $c$
-calibrates between type I errors (falsely deciding that ${P\neq
+calibrates between type-I errors (incorrectly deciding that ${P\neq
   Q}$),
-and type II errors (deciding ${P=Q}$ when distributions differ). In
-terms of the Geweke diagnostic, a type II error would lead us to
+and type-II errors (deciding ${P=Q}$ when distributions differ). In
+terms of the Geweke diagnostic, a type-II error would lead us to
 believe that an incorrect sampler is correct.
 
-To generalize this approach, let $\mathcal{F}$ be an arbitrary
-(possibly infinite) class of real-valued functions, and consider the quantity
-\begin{equation*}
-  d_{\mathcal{F}}(X,Z)\;:=\;\sup_{f\in\mathcal{F}}|\mathbb{E}[f(X)]-\mathbb{E}[f(Z)]|\;.
-\end{equation*}
-One way to interpret $d_\mathcal{F}$ is as a test statistic: 
-The sample estimate
+To generalize this approach, let $\mathcal{F}$ be a
+class of real-valued functions, and define a
+quantity $d_\mathcal{F}$ and its sample estimate as
 \begin{equation}
-  \hat{d}_\mathcal{F}(X,Z)\;:=\;
-  \sup_{f\in\mathcal{F}}|\hat{\mathbb{E}}[f(X)]-\hat{\mathbb{E}}[f(X)]| \label{eq:naive-IPM}
+  d_{\mathcal{F}}(X,Z)\;:=\;\sup_{f\in\mathcal{F}}|\mathbb{E}[f(X)]-\mathbb{E}[f(Z)]|,\qquad
+    \hat{d}_\mathcal{F}(X,Z)\;:=\;
+    \sup_{f\in\mathcal{F}}|\hat{\mathbb{E}}[f(X)]-\hat{\mathbb{E}}[f(X)]|.
+      \label{eq:naive-IPM}
 \end{equation}
-defines a hypothesis test with decision rule 
-${\hat{d}_\mathcal{F}(X,Z)\geq\alpha}$. Clearly, choosing
-$\mathcal{F}$ as ${\{t_1,\ldots,t_k\}}$ recovers ${\hat{d}_\mathcal{F}(X,Z)=T_{\text{max}}}$.
-Another interpretation is as a distance between distributions:
-If $\mathcal{F}$ is sufficiently large, $d_\mathcal{F}$ defines a
+One way to interpret $d_\mathcal{F}$ is as a distance:
+If $\mathcal{F}$ is sufficiently large, $d_\mathcal{F}$ is a
 metric on probability measures. Metrics of this form are called
-\emph{integral probability metrics}. Examples are the Wasserstein
-distance of order 1 (choose $\mathcal{F}$ as all Lipschitz functions
-with constant 1), the total variation distance ($\mathcal{F}$ consists
-of all indicator functions of measurable sets), or, on the real line,
-the Kolmogorov-Smirnov distance (use the indicators of
-all sets of the form ${(-\infty,x]}$). See \cite{mueller:1997} for an overview.
+\emph{integral probability metrics}, and include the Wasserstein-1
+distance (choose $\mathcal{F}$ as all 1-Lipschitz functions),
+and total variation and Kolmogorov-Smirnov distances. See \cite{mueller:1997} for an overview.
+Another interpretation is as a test statistic:
+$\hat{d}_\mathcal{F}$ defines a hypothesis test with decision rule 
+${\hat{d}_\mathcal{F}(X,Z)\geq c}$. Clearly, choosing
+$\mathcal{F}$ as ${\{f_1,\ldots,f_m\}}$ recovers ${\hat{d}_\mathcal{F}(X,Z)=T_{\text{max}}}$.
+
 
 Our objective is to choose $\mathcal{F}$ so that the resulting test is
 (i) accurate, (ii) applicable on a range of
 domains and (iii) practically feasible.
 Accuracy depends on the choice of $\mathcal{F}$.
-Statistics distinguishes between \emph{parametric} tests,
-where $\mathcal{F}$ is finite, and \emph{nonparametric} tests, where it is
-infinite. Thus, the Geweke diagnostic uses a parametric test.
-Such tests have some fundamental limitations: It is not hard to
-verify, for example, that $d_\mathcal{F}$ is not positive definite if
-$\mathcal{F}$ is finite (unless the domain is a finite set, or one
-restricts to a very small subset of distributions), so one cannot
-conclude from ${d_\mathcal{F}(X,Z)=0}$ that $X$ and $Z$ are
-identically distributed. Thus, even in the limit of infinite sample
-size, every parametric test will produce type
-II errors for certain pairs of distributions.
-This problem does not arise if we choose a function class that makes
-$d_{\mathcal{F}}$ a metric---if so,
-${d_\mathcal{F}(X,Z)=0}$ indeed guarantees $X$ and $Z$ are identically
-distributed.
-None of the metrics above yields a feasible test, however, since
-the supremum over the infinite class $\mathcal{F}$ cannot be evaluated.
+Statistics distinguishes \emph{parametric} tests, where $\mathcal{F}$ is
+finite, from \emph{nonparametric} ones, where it is
+infinite. It is illustrative to
+consider extreme cases: If $d_\mathcal{F}$ is a metric,
+${d_\mathcal{F}(X,Z)=0}$ implies $X$ and $Z$ are
+identically distributed, and one may asymptotically obtain a perfect test.
+If $\mathcal{F}$ is finite, on the other hand, the proportion of
+type-II errors is bounded away from zero, and will flatten out as sample size
+grows. 
+In practice, the metric property is not essential, since sample size
+is finite. What matters is rather whether one can expect the
+proportion of type-II errors
+to keep decreasing as sample size grows. That requires a nonparametric test;
+the one used in the Geweke diagnostic is parametric.
 
+The obstacle to designing a nonparametric test using $d_\mathcal{F}$
+is the supremum in \eqref{eq:naive-IPM}, which can only be evaluated directly if
+$\mathcal{F}$ is finite.
 A nonparametric yet computable test
-can be obtained as follows: Fix a reproducing kernel
-Hilbert space $\mathcal{H}$, with kernel
+can be obtained as follows: fix a reproducing kernel
+Hilbert space $\mathcal{H}$ \cite[see e.g.,][Definition 4.18]{steinwart_support_2008}, with kernel
 ${k:\mathcal{X}\times\mathcal{X}\rightarrow\mathbb{R}}$, and 
 choose $\mathcal{F}$ as the unit ball ${B(\mathcal{H})}$ in $\mathcal{H}$.
+The quantity
 \begin{equation*}
   \mathrm{MMD}(P,Q)
   \;:=\;
@@ -346,354 +380,414 @@ choose $\mathcal{F}$ as the unit ball ${B(\mathcal{H})}$ in $\mathcal{H}$.
   \sup_{f\in B(\mathcal{H})}|\mathbb{E}[f(X)]-\mathbb{E}[f(Z)]|
 \end{equation*}
 is called the \emph{maximum mean discrepancy} of $P$ and $Q$.
-One can show that this is a metric if $k$ has suitable properties---if it is a
-so-called \emph{characteristic kernel} \citep{fukumizu_kernel_2007}. 
+If $k$ has certain additional properties---if it is a
+so-called \emph{characteristic kernel}---$d_{B(\mathcal{H})}$ is even
+a metric \citep{fukumizu_kernel_2007, sriperumbudur_universality_2011}.
 The definition still involves a supremum over an infinite class
-$\mathcal{F}$, but one can also show that
+$\mathcal{F}$, but one can show that
 \begin{equation}
   \mathrm{MMD}(P,Q)^2\;=\;\mathbb{E}[k(X,X')]-2\mathbb{E}[k(X,Z)]+\mathbb{E}[k(Z,Z')]\;,\label{eq:mmd2}
 \end{equation}
 for four independent random variables ${X,X'\sim P}$ and ${Z,Z'\sim
-  Q}$ \cite{gretton_kernel_2012}.
+  Q}$ \citep{gretton_kernel_2012}.
+
+
   
-In contrast to the naive estimator \eqref{eq:naive-IPM}, the form in \eqref{eq:mmd2} allows estimation with pair-wise sample evaluations of the kernel. 
-In particular, we can consider the following estimators, 
+In contrast to the naive estimator in \eqref{eq:naive-IPM}, the form in \eqref{eq:mmd2} allows estimation with paired-sample evaluations of the kernel. 
+In particular, we can consider the estimator 
 \begin{align}
-        \widehat{\mathrm{MMD}^2}_{V} &\coloneqq \frac{1}{n^2}  \sum_{i,j=1}^n k\left(X_{i}, X_{j}\right)
-        -\frac{2}{n^2} \sum_{i,j=1}^{n} k\left(X_{i}, \tilde{X}_{j}\right)+\frac{1}{n^2}\sum_{i,j=1}^{n} k\left(\tilde{X}_{i}, \tilde{X}_{j}\right), \label{eq:mmd_biased}\\
-    \widehat{\mathrm{MMD}^2}_{U} &\coloneqq \frac{1}{{n\choose 2}} \sum_{1\leq i < j}^{n} k\left(X_{i}, X_{j}\right) -\frac{2}{n^2} \sum_{i,j = 1}^{n} k\left(X_{i}, \tilde{X}_{j}\right) + \frac{1}{{n \choose 2}}\sum_{1\leq i < j}^n k\left(\tilde{X}_{i}, \tilde{X}_{j}\right), \label{eq:mmd_unbiased}\\
+        \widehat{\mathrm{MMD}^2} &\coloneqq \frac{1}{n^2}  \sum_{i,j=1}^n k\left(X_{i}, X_{j}\right)
+        -\frac{2}{n^2} \sum_{i,j=1}^{n} k\left(X_{i}, Z_{j}\right)+\frac{1}{n^2}\sum_{i,j=1}^{n} k\left(Z_{i}, Z_{j}\right), \label{eq:mmd_biased}
+    % \widehat{\mathrm{MMD}^2}_{U} &\coloneqq \frac{1}{{n\choose 2}} \sum_{1\leq i < j}^{n} k\left(X_{i}, X_{j}\right) -\frac{2}{n^2} \sum_{i,j = 1}^{n} k\left(X_{i}, Z_{j}\right) + \frac{1}{{n \choose 2}}\sum_{1\leq i < j}^n k\left(Z_{i}, Z_{j}\right), \label{eq:mmd_unbiased}\\
 \end{align}
-which are, respectively, a V-statistic and a U-statistic \citep{Hoeffding1948, Vaart_1998, Mises1947asymptotic}.
-Asymptotic behaviours of these estimators have been established, which enable us to calibrate a threshold to reject the null. 
-% We reject the null hypothesis if a statistic $T_n$ (either of the above estimators) is sufficiently large. 
-% In doing so, we need to control the type-I error rate (i.e., the probability of falsely rejecting the null). 
-Specifically, with $T_n$ denoting either of the estimators \eqref{eq:mmd_biased}, \eqref{eq:mmd_unbiased}, we design a threshold $c_{\alpha, n}$ such that the type-I error $\mathrm{Prob} (T_n > c_{\alpha, n}\given H_0)\leq \alpha$ is bounded by a given significance level $\alpha \in (0,1)$.
-% The asymptotic distributions of the statistics in \eqref{eq:mmd_biased} and \eqref{eq:mmd_unbiased} have been studied. 
-If the samples are i.i.d., we can simulate the distribution under the null $H_0: P=\tilde{P}$ by repeatedly permuting the samples and taking as the test threshold the $1-\alpha$ empirical quantile of the bootstrapped statistics \citep{gretton_kernel_2012}. 
-When the samples are not i.i.d., as in the case of Markov chains, the permutation bootstrap is inappropriate because it breaks the independence between observations.
-\citet{chwialkowski_wild_2014} provide a bootstrap procedure for the V-statistic \eqref{eq:mmd_biased} with correlated samples ($\tau$-mixing processes).
-In this case, we can simulate the null distribution by drawing the wild-bootstrapped MMD
+which is a V-statistic \citep{Vaart_1998,Mises1947asymptotic}. Note that the cost of computing the statistic is quadratic in the sample size, but its parallelization is straightforward. 
+Since the asymptotic behavior of this statistic has been established, we can calibrate the threshold $c$ to reject the null:
+If $T_n$ denotes the estimator \eqref{eq:mmd_biased}, we choose a threshold $c_{\alpha, n}$ such that the type-I error rate $\mathrm{Prob} (T_n > c_{\alpha, n}\given P=Q)\leq \alpha$ is bounded by a given significance level $\alpha \in (0,1)$.
+
+If the samples are i.i.d., we can simulate the distribution under the null by repeatedly permuting the samples and taking as the test threshold the ${1-\alpha}$ empirical quantile of the bootstrapped statistics \citep{gretton_kernel_2012}. 
+When the samples are not i.i.d., as in the case of Markov chains, the permutation bootstrap is inappropriate because it breaks the dependence between observations.
+\citet{chwialkowski_wild_2014} provide a bootstrap procedure for \eqref{eq:mmd_biased} with correlated samples ($\tau$-mixing processes).
+In this case, we can simulate the null distribution by ``wild bootstrapping'': A wild bootstrap process $\{W_t\}_{t\leq n}$ is a random weight sequence
+given by $W_{t}=\exp(-1/l_n) W_{t-1}+\sqrt{1-\exp(-2/{l_n})}\epsilon_{t}$,
+with $W_{0} \sim \mathcal{N}(0,1)$ and $\epsilon_{t} \sim \mathcal{N}(0,1)$. We then define the wild-bootstrapped MMD
 \begin{equation}
 \begin{array}{c}
-\widehat{\mathrm{MMD}^2}_{V, b}=\frac{1}{n^2} \sum_{i,j=1}^{n} W_{i}^{(x)} W_{j}^{(x)} k\left(X_{i}, X_{j}\right)+\frac{1}{n^2} \sum_{i,j=1}^{n} W_{i}^{(y)} W_{j}^{(y)} k\left(\tilde{X}_{i}, \tilde{X}_{j}\right) \\
-\quad-\frac{2}{n^2} \sum_{i,j=1}^{n}W_{i}^{(x)} W_{j}^{(y)} k\left(X_{i}, \tilde{X}_{j}\right)
+\widehat{\mathrm{BMMD}^2}=\frac{1}{n^2} \sum_{i,j=1}^{n} W_{i}^{(x)} W_{j}^{(x)} k\left(X_{i}, X_{j}\right)+\frac{1}{n^2} \sum_{i,j=1}^{n} W_{i}^{(y)} W_{j}^{(y)} k\left(Z_{i}, Z_{j}\right) \\
+\quad-\frac{2}{n^2} \sum_{i,j=1}^{n}W_{i}^{(x)} W_{j}^{(y)} k\left(X_{i}, Z_{j}\right)
 \end{array}
 \label{eq:wb_mmd}
 \end{equation}
-where $\{W_{t}^{(x)}\}_{t\leq n}$, $\{W_{t}^{(y)}\}_{t\leq n}$ are two wild bootstrap processes.
-They are independent of each other and samples $\{X_1, \dots, X_n\},$ $\{Z_1, \dots, Z_n\}$, and follow $W_{t}=\exp(-1/l) W_{t-1}+\sqrt{1-\exp(-2/{l})}\epsilon_{t}$,
-% \begin{equation}
-%     W_{t}=\exp{\left(-\frac{1}{l}\right)} W_{t-1}+\sqrt{1-\exp{\left(-\frac{2}{l}\right)}} \epsilon_{t}
-%     \label{eq:wb_process}
-% \end{equation}
-with $W_{0} \sim \mathcal{N}(0,1)$ and $\epsilon_{t} \sim \mathcal{N}(0,1)$ \cite[see, ][]{chwialkowski_wild_2014, leucht_dependent_2013}.
+where $\{W_{t}^{(x)}\}_{t\leq n}$, $\{W_{t}^{(y)}\}_{t\leq n}$ are two wild bootstrap processes that
+are independent of each other and samples $\{X_1, \dots, X_n\},$ $\{Z_1, \dots, Z_n\}$ \cite[see][]{chwialkowski_wild_2014, leucht_dependent_2013}.
 
 % Importantly, the MMD test is consistent in power against a fixed alternative; i.e., the type-II error converges to zero as the sample size increases.
 
-\begin{table}[b]
-    \caption{Backward Joint Sampling Algorithms. The symbol $L$ denotes the burn-in size, and $j$ is the thinning step size.
-    The transition kernel of an MCMC sampler for the target $\tildepi(\theta\given y)$ is denoted by $q_{y}(\theta_{1} \given \theta_0)$ (density of the next position $\theta_1$ conditioned on the present $\theta_0$). 
-    }
-    \label{tab:sampling}
-    \centering
-    \begin{tabular}{l|l}
-    \toprule
+% \begin{table}[b]
+%     \caption{Backward joint sampling algorithms. The symbol $L$ denotes the burn-in size, and $t$ is the thinning step size.
+%     The transition kernel of an MCMC sampler for the target $\tildepi(\theta\given y)$ is denoted by $q_{y}(\theta_{l+1} \given \theta_l)$ (density of the next position $\theta_{l+1}$ conditioned on the present $\theta_l$). 
+%     }
+%     \label{tab:sampling}
+%     \centering
+%     \begin{tabular}{ll}
+%     \toprule
+%         Successive-conditional (SC) & Backward-conditional (BC) \\
+%     \midrule  
+    
+%     Initialize $\Theta'_{0} \sim \pi(\theta)$                                      & Repeat: $\Theta'_{i, 0} \sim \pi(\theta), Y'_{i} \sim p(y|\Theta'_{i, 0})$ \\
+%     Repeat: $Y'_{i} \sim p(y|\Theta'_{i-1}), \Theta'_{i} \sim q_{Y'_i}(\theta|\Theta'_{i-1})$   & \qquad $\Theta'_{i, l} \sim q_{Y'_i}(\theta|\Theta'_{i, l-1})$ for $l=1,...,L+1$ \\
+%     Keep $\{(Y'_{i}, \Theta'_{i})\given i=L+kt; k=1,2,\ldots; t\geq 1 \}$                     & \qquad Keep $(Y'_{i}, \Theta'_{i,L+1})$ \\
+%     \bottomrule
+%     \end{tabular}
+% \end{table}
+\section{Kernel tests for MCMC}
+% Recall that our objective is to check the consistency of the backward joint $\tildepi(\theta \given y) p(y)$, defined by an MCMC sampler for $\tildepi(\theta\given y)$, with the forward joint $p(y\given \theta)\pi(\theta).$
+We have seen that the MMD test can implement Geweke's idea of comparing distributions underlying the samples $\{(Y_1,\Theta_1),\ldots,(Y_n,\Theta_n)\}, $ $\{(Y_1',\Theta_1'),\ldots,(Y_n',\Theta_n')\}, $ from the forward and backward joint distributions. 
+We introduce two concrete tests, which differ in their sampling method for the backward joint distribution and bootstrapping method. 
+% The two backward joint distribution sampling algorithms are summarized below:\\[1em]
+Below, we summarize the two sampling algorithms, which are put into context in the following sections. 
+
+\makebox[\textwidth][c]{
+    \begin{tabular}{ll}
         Successive-conditional (SC) & Backward-conditional (BC) \\
     \midrule  
-    
-    Initialize $\theta_{0} \sim p(\theta)$                                      & Repeat: $\theta_{0} \sim p(\theta), y_{i} \sim p(y|\theta_{0})$ \\
-    Repeat: $y_{i} \sim p(y|\theta_{i-1}), \theta_{i} \sim q_{y_i}(\theta|\theta_{i-1})$   & \qquad $\theta_{l} \sim q_{y_i}(\theta|\theta_{l-1})$ for $l=1,...,L+1$ \\
-    Keep $\{(y_{i}, \theta_{i}) \given i=L+kj; k=1,2,\ldots; j\in\mathbb{N} \}$                     & \qquad Keep $(y_{i}, \theta_{L+1})$ \\
-    \bottomrule
-    \end{tabular}
-\end{table}
-\section{Kernel tests for MCMC}
-Our objective is to check the consistency of the backward joint $\tildepi(\theta \given y) p(y)$, defined by an MCMC sampler for $\tildepi(\theta\given y)$, with the forward joint $p(y\given \theta)\pi(\theta).$
-In this section, we introduce two versions of the MMD test, which differ in their sampling method for the backward joint.  
-% Note that sampling from the the forward joint is straightforward by ancestral sampling: draw a parameter $\theta_0$ from the prior $\pi(\theta)$, and then a data point $y_0\sim p(y|\theta_0)$. 
-% We therefore use the same sampling method for the forward joint, and consider two sampling algorithms for the backward: successive-conditional (SC) algorithm \citep{geweke_getting_2004} and backward-conditional (BC) algorithm \citep{gandy_unit_2020}. 
-
-% In the following, we denote the transition kernel of an MCMC sampler for the target $\tildepi(\theta\given y)$ by $q_{y}(\theta_{1} \given \theta_0)$ (probability density of moving from $\theta_0$ to $\theta_1$). 
-% In the following, we denote a sample from the forward joint by $S_f=\{(y_i, \theta_i)\}_{i=1}^n$.
-
-% Like the Geweke test, our methods compare samples from the forward and backward joints in \eqref{eq:joint}.
-% They share the same forward joint sampling algorithm, but differ in their choice of backward joint sampling algorithm and subsequent construction of the test threshold.
-
-% The marginal-conditional (MC) algorithm samples from the forward joint by drawing parameters from the prior, followed by drawing data from the likelihood, conditioned on the sampled parameters.
-% The samples are independent and the algorithm easily parallelized.
-
-% There are two sampling methods for the backward joint.
-% As described in \cite{geweke_getting_2004}, successive-conditional (SC) algorithm involves drawing sequentially from a Markov chain. The chain is initialized from the prior, then run forward by alternating draws from the likelihood, conditioned on the parameters, and the posterior MCMC sampler, conditioned on the data. A single sample is comprised of a draw from the likelihood and a draw from the posterior sampler. We may thin the successive-conditional samples to reduce their serial dependence and type I error rates. 
-
-
+        Initialize $\Theta'_{0} \sim \pi(\theta)$                                      & Repeat: $\Theta'_{i, 0} \sim \pi(\theta), Y'_{i} \sim p(y|\Theta'_{i, 0})$ \\
+    Repeat: $Y'_{i} \sim p(y|\Theta'_{i-1}), \Theta'_{i} \sim q(\theta\given \Theta'_{i-1}, Y'_i)$   & \qquad $\Theta'_{i, l} \sim q(\theta\given \Theta'_{i, l-1}, Y'_i)$ for $l=1,...,L+1$ \\
+    Keep $\{(Y'_{i}, \Theta'_{i})\given i=L+kt; k=1,2,\ldots; t\geq 1 \}$                     & \qquad Keep $(Y'_{i}, \Theta'_{i,L+1})$ \\[1em]
+ \end{tabular}
+}
+Here, $L$ denotes burn-in size, and $t$ the thinning step size. The transition kernel of an MCMC sampler for the target $\tildepi(\theta\given y)$ is denoted by $q(\theta_{l+1} \given \theta_l, y)$ (density of the next position $\theta_{l+1}$ conditioned on the present $\theta_l$). 
 
 \subsection{Successive-conditional MMD Test}
-We first consider the MMD test with the SC algorithm (Table \ref{tab:sampling}, left), termed the successive conditional MMD test (MMD-SC).  
+Our first method uses the SC algorithm \cite{geweke_getting_2004}:
 % The successive-conditional MMD (MMD-SC) extends the the Geweke test. 
-The SC algorithm involves drawing sequentially from a Markov chain. The chain is initialized from the prior, then run forward by alternating draws from the likelihood, conditioned on the parameters, and the posterior MCMC sampler, conditioned on the data. 
-A single sample is comprised of a draw from the likelihood and a draw from the posterior sampler.
-We may thin the successive-conditional samples to reduce their serial dependence and type-I error rates. 
-Since the samples are correlated, we use the wild-bootstrapped MMD test from \cite{chwialkowski_wild_2014}. 
-
-The testing procedure is given as follows. For significance level $\alpha$ and $B$ bootstrap samples, 
+The SC algorithm draws sequentially from a Markov chain. The chain is initialized from the prior, then run forward by alternating draws from the likelihood, conditioned on the parameters, and the posterior MCMC sampler, conditioned on the data. 
+Each sample consists of a draw from the likelihood and a draw from the posterior sampler.
+We may thin the sample sequence to reduce sequential dependence. 
+For a given significance level $\alpha$ and a bootstrap sample size $B$, the overall test proceeds as follows: 
 \begin{enumerate}
-    \item Draw a forward-joint sample $S_f=\{(y_i,\theta_i)\}_{i=1}^n$ by ancestral sampling.
-    \item Draw a backward-joint sample $S_{b}^{\mathrm{SC}}\{(\tilde{y}_i, \tilde{\theta}_{i})\}_{i=1}^{n}$ with the SC algorithm.
-    % \item Apply test functions to both samples and normalize feature scales by their pooled standard deviation
-    \item Calculate $\widehat{\mathrm{MMD}}_{V}^{2}$ using $S_f$ and $S_b^{\mathrm{SC}}$.
-    \item Simulate $\{\widehat{\mathrm{MMD}}^{2}_{V, b}\}_{b=1}^{B}$ using \eqref{eq:wb_mmd} and calculate $c_{\alpha}$, their $1-\alpha$ empirical quantile.
-    \item If $\widehat{\mathrm{MMD}}^{2}_{V} \geq c_{\alpha}$, reject the null hypothesis (suspect an error).
+    \item Draw a forward-joint sample $S_f=\{(Y_i,\Theta_i)\}_{i=1}^n$ by ancestral sampling \eqref{eq:ancestralsampling}.
+    \item Draw a backward-joint sample $S_{b}^{\mathrm{SC}}=\{(Y'_i, \Theta'_{i})\}_{i=1}^{n}$ with the SC algorithm.
+    \item Calculate $\widehat{\mathrm{MMD}^2}$ using $S_f$ and $S_b^{\mathrm{SC}}$.
+    \item Simulate $\{\widehat{\mathrm{BMMD}^2}_{b}\}_{b=1}^{B}$ using \eqref{eq:wb_mmd} and calculate $c_{\alpha, n}$, their $1-\alpha$ empirical quantile.
+    \item If $\widehat{\mathrm{MMD}^2} \geq c_{\alpha, n}$, reject the null hypothesis (suspect an error).
 \end{enumerate}
-For the wild bootstrap process, we set $l$ equal to $5\%$ of the sample size after thinning.
+Since the samples are correlated, we use the wild-bootstrapped MMD test, with
+the parameter $l_n$ chosen as $5\%$ of the sample size after thinning (see the final paragraph in Section \ref{sec:background}).
+We refer to this method as the successive conditional MMD test (MMD-SC) in the ensuing discussion.
 
 \subsection{Backward-conditional MMD Test}
-The backward conditional MMD test (MMD-BC) uses the BC algorithm (Table \ref{tab:sampling}, right). 
-The BC algorithm first draws from the (model) marginal of the data, burn in the MCMC sampler (conditioned on the generated data) and then obtain a parameter sample.
-Since the samples are all independent, we can calculate the unbiased MMD statistic and use permutation bootstrapping to generate the test threshold as described in \cite{gretton_kernel_2012}. In contrast to the successive-conditional samples, the backwards-conditional samples can be drawn in parallel; the trade-off, however, is that each sample requires a burn-in period, while the successive-conditional samples require only one burn-in.
-
-For a significance level $\alpha$ and $B$ bootstrap samples, the testing procedure is as follows.
+The backward conditional MMD test (MMD-BC) uses the BC algorithm.
+Draw from the (model) marginal of the data, burn in the MCMC sampler for the posterior given that data, collect one parameter sample, and repeat.
+The test procedure is as follows:
 \begin{enumerate}
-    \item Draw a forward-joint sample $S_f=\{(y_i,\theta_i)\}_{i=1}^n$ by ancestral sampling.
-    \item Draw a backward-joint sample $S_{b}^{\mathrm{BC}}\{(\tilde{y}_i, \tilde{\theta}_{i})\}_{i=1}^{n}$ with the BC algorithm.
-    % \item Apply test functions to both samples and normalize scales by their pooled standard deviations
-    \item Calculate $\widehat{\mathrm{MMD}}_{U}^{2}$ using $S_f$ and $S_b^{\mathrm{BC}}$.
-    \item Simulate the null distribution of $\widehat{\mathrm{MMD}}_{U}^{2}$ via permutation and calculate the $1-\alpha$ empirical quantile $c_{\alpha}.$
-    \item If $\widehat{\mathrm{MMD}}_{U}^{2} \geq c_{\alpha}$, reject the null hypothesis that the distributions are the same
+    \item Draw a forward-joint sample $S_f=\{(Y_i,\Theta_i)\}_{i=1}^n$ by ancestral sampling \eqref{eq:ancestralsampling}.
+    \item Draw a backward-joint sample $S_{b}^{\mathrm{BC}}=\{(Y'_i, \Theta'_{i})\}_{i=1}^{n}$ with the BC algorithm.
+    \item Calculate $\widehat{\mathrm{MMD}^2}$ using $S_f$ and $S_b^{\mathrm{BC}}$.
+    \item Compute the $1-\alpha$ empirical quantile $c_{\alpha, n}$ via permutation bootstrap (see Section~\ref{sec:background}).  
+    \item If $\widehat{\mathrm{MMD}}^{2} \geq c_{\alpha, n}$, reject the null (suspect an error). 
 \end{enumerate}
+Since the samples are all independent, we can use permutation bootstrapping to compute the test threshold as described in \cite{gretton_kernel_2012}. 
+In contrast to the SC algorithm, the backwards-conditional samples can be drawn in parallel, but there is a trade-off: Each sample requires a burn-in period, while the successive-conditional samples require only one burn-in.
 
-An additional advantage of the MMD-BC test is that it may provide some guidance in choosing the number of burn-in samples for inference; a correct sampler may still fail the test if $L$ is set too low.
+% The two different backward joint distribution sampling algorithms can be succinctly formulated as follows:\\[1em]
+% \makebox[\textwidth][c]{
+%     \begin{tabular}{ll}
+%         Successive-conditional (SC) & Backward-conditional (BC) \\
+%     \midrule  
+%         Initialize $\Theta'_{0} \sim \pi(\theta)$                                      & Repeat: $\Theta'_{i, 0} \sim \pi(\theta), Y'_{i} \sim p(y|\Theta'_{i, 0})$ \\
+%     Repeat: $Y'_{i} \sim p(y|\Theta'_{i-1}), \Theta'_{i} \sim q(\theta\given \Theta'_{i-1}, Y'_i)$   & \qquad $\Theta'_{i, l} \sim q(\theta\given \Theta'_{i, l-1}, Y'_i)$ for $l=1,...,L+1$ \\
+%     Keep $\{(Y'_{i}, \Theta'_{i})\given i=L+kt; k=1,2,\ldots; t\geq 1 \}$                     & \qquad Keep $(Y'_{i}, \Theta'_{i,L+1})$ \\[1em]
+%  \end{tabular}
+% }
+% Here, $L$ denotes burn-in size, and $t$ the thinning step size. The transition kernel of an MCMC sampler for the target $\tildepi(\theta\given y)$ is denoted by $q(\theta_{l+1} \given \theta_l, y)$ (density of the next position $\theta_{l+1}$ conditioned on the present $\theta_l$). 
+\subsection{Kernel Selection}\label{sec:kernel_selection}
+Specific kernel choices are detailed in Section \ref{sec:experiments}, but we briefly discuss a few general considerations.
+Before we select a kernel function, we have to choose its domain:
+The obvious input values are a data-parameter pair $(y,\theta)$. In Geweke tests, the input dimensions are usually parameters vectors $\theta$, or pairs $(y,\theta)$. We augment this with the numerical values $p(y\given\theta)$ of the likelihood and $\pi(\theta)$ of the prior, and use input vectors of the form
+\[\begin{bmatrix}y,&\theta, & p(y|\theta), & \pi(\theta) \end{bmatrix}^{\top}\;.\]
+The rationale is that, if the posterior represented by the sampler differs from the exact posterior $\pi(\theta|y) \propto p(y\given \theta)\pi(\theta)$, the discrepancy may be detectable in the likelihood and the prior. As we will see in Section \ref{sec:experiments}, this simple heuristic can greatly improve power.
 
-\subsection{Kernel Selection}
-While the MMD test is consistent for any characteristic kernel, the finite-sample performance of the test critically depends on the choice of the kernel. 
-It is known that poor kernel choice leads to degrading test performance, particularly in high dimension. 
-\cite{reddi_decreasing_2014} show this explicitly for the Gaussian and Laplace kernels, where a poor choice of the bandwidth parameter makes the population MMD extremely small, resulting in a challenging testing problem.
-Note that as our tests operate on the product space of the data and parameter sets, the input dimension tends to be high.
-Therefore, to improve the test's sensitivity, we need to construct a kernel that help capture the difference between the joint distributions.
+In theory, the MMD test is consistent for any characteristic kernel. Finite-sample performance, however, depends on the specific kernel used (and whether it is characteristic is often of limited practical importance). Poor kernel choice can significantly degrade test performance. For Gaussian and Laplace kernels, for example, an inadequate bandwidth results in an extremely small population MMD \citep{reddi_decreasing_2014}. Problems can be amplified in higher dimensions, which arise in our setting since tests operate on the product of data and parameter space.
 
-In addition to the raw features $g(y, \theta)=[y,\theta]^\top,$ following \cite{gandy_unit_2020}, we use two additional features
-\[h(y, \theta)=\begin{bmatrix}p(y|\theta), & \pi(\theta) \end{bmatrix}^{\top}\]
-that is, the evaluations of the likelihood $p(y\given\theta)$ and the prior $\pi(\theta)$ on the sample.
-As we will see in Section \ref{sec:experiments}, this simple heuristic is useful in our setting. 
-Intuitively, under an incorrect posterior distribution, certain parameter values will be more or less likely to be observed than they would be under the correct posterior; since $\pi(\theta|y) \propto p(y\given \theta)\pi(\theta)$, these discrepancies should manifest in the likelihood and prior.
-
-In addition to using handcrafted features as above, we can also consider optimizing a kernel to maximize (an estimate of) the test power, such as by choosing an optimal scale \citep{Gretton2012, Sutherland2017} or learning distinguishing features with deep neural networks \citep{Liu2020}. 
-These approaches are subject to the reduced test data size caused by sample splitting and may result in power loss if the available data is limited.  
-However, in our setting (MMD-BC), we can generate as many independent samples as needed, this issue does not arise. 
-In our experiments, to establish a fair comparison, we only consider the features $g$ and $h$. 
-Nonetheless, our practical recommendation is to additionally use the aforementioned techniques.
-% we use the features (test functions)
-% \begin{equation}
-%     g(\theta, y) = \begin{bmatrix} y & \theta \end{bmatrix}^{\top} \quad h(\theta, y) = \begin{bmatrix}p(y|\theta)) & p(\theta) \end{bmatrix}^{\top}
-%     \label{eq:testfn}
-% \end{equation}
-
-% While $g(\theta, y)$ are all that are required for consistency, the MMD tests still benefit from the inclusion of MCMC-specific test functions. 
-
-% \hksay{We should move the following info to the experiment section.}
-% Any characteristic kernel will provide a consistent test.
-% However, if the feature scales vary greatly, it may take too many samples to detect errors in the lower-variance features. Thus, we first normalize the feature scales by dividing each sample feature by the corresponding pooled standard deviation before applying the kernel function. 
-% In $\mathbb{R}^{d}$, one choice is the Gaussian kernel $k(x, x') = \exp{\left( -\frac{\Vert x-x' \Vert^{2}}{\tau} \right)}$. The bandwidth $\tau$ must be chosen carefully to match the features for good test power; one may use the median pairwise L2 norm in the pooled samples, known in the literature as the median heuristic. 
-
-
-% One weakness of MMD-based tests, however, is that their power decays with sample dimension. \cite{reddi_decreasing_2014} show this explicitly for the Gaussian and Laplace kernels. 
-% Intuitively, as the sample dimension increases, the similarity between any two differing points decays exponentially, and the bootstrapped statistics will approach the true statistic, making distinguishing differing distributions difficult.
-% To combat this, we base our tests on the inverse multiquadratic (IMQ) kernel $k_{\text{IMQ}}(x, x') = (c^{2} + \Vert x - x' \Vert_{2}^{2})^{\beta} $ with $c=1, \beta=-\frac{1}{2}$. This kernel has fatter tails than the Gaussian kernel and may therefore perform better in higher dimensions \citep{gorham_measuring_2020}.
-
-% Given both the baseline and auxiliary features, we use the kernel $k_{\text{IMQ}}(g, g') + k_{\text{IMQ}}(h, h')$, which is characteristic on $(\theta, y)$.
+Our experiments do not use kernel model selection methods (which confound results by giving MMD algorithms an unfair advantage), but a few remarks are in order: Cross validation can be used to estimate test power, and hence to maximize it---by optimizing bandwidth \citep{Gretton2012, Sutherland2017}, for example, or by learning bespoke features with a neural network \citep{Liu2020}. Since samples are simulated, the common drawback that cross validation reduces sample size can be offset by additional computation.  
+Cross validation is straightfoward for MMD-BC (and we recommend its use), but more complicated for MMD-SC, where
+samples are correlated. We are not aware of any available results on kernel optimization for non-i.i.d.\ data.
 
 \section{Related Work}
 \label{related:work}
 % We acknowledge that the proposed test is not entirely novel, as it is built on the existing tests of \cite{geweke_getting_2004} and \cite{gretton_kernel_2012}.
 % Although the idea behind the MMD-SC test was briefly mentioned in \cite{lloyd_statistical_2015}, systematic comparison with other MCMC unit tests has not been established. 
 % % and a similar test was applied in \cite{liu_kernelized_2016} as a benchmark for model goodness-of-fit tests. However, \cite{liu_kernelized_2016} incorrectly uses the unbiased MMD test statistic \eqref{eq:mmd_unbiased} with permutation bootstrapped null distribution. Because the MCMC samples are dependent, the permutation bootstrap assumption that the samples are i.i.d. is violated. Instead, we use the biased MMD test statistic \eqref{eq:    mmd_biased} with wild bootstrapped null distribution, which allows for dependent samples \cite{chwialkowski_wild_2016}. 
+ 
+{\noindent\bf Variations on Geweke's method}. \citet{gandy_unit_2020} propose use of the BC-algorithm for the backward joint in a Geweke test.
+Their test is parametric, and also involves multiple hypothesis testing (as in \cite{geweke_getting_2004}). In higher dimensions in particular,
+that typically requires multiple testing corrections, which may reduce test power.
 
-% Additionally, there are several related MCMC unit tests in the literature which we will use as benchmarks. 
-Our tests build on the joint consistency check of \cite{geweke_getting_2004}. 
-The two-sample test of \cite{gandy_unit_2020} similarly follows Geweke's idea but uses the BC-algorithm to conduct a two-sample test.
-The difference between their test and ours is that they perform multiple hypothesis testing, as in \citep{geweke_getting_2004}; 
-that is, a hypothesis is defined by the difference of the distributions of the samples evaluated on a test function. A common choice for test functions in the literature is all first and second moments of the parameters.
-This approach may suffer power loss from multiple testing correction as the number of functions increases (e.g., when the dimensions of $y$ and $\theta$ are high). 
-In contrast, the MMD tests do not require such corrections.
-% In their experiment, they use multiple Kolmogorov-Smirnov (KS) tests.
+Several authors consider weakening the test from one that tests whether $\tildepi(\theta\given y)\approx\pi(\theta\given y)$ to one that tests
+$\tildepi(\theta)\approx\pi(\theta)$, for the aggregate posterior $\tildepi(\theta)=\int \tildepi(\theta\given y)p(y)\dd y$. Note the former implies the latter, but not vice versa.
+If the posterior is correct, the rank statistics of a prior sample relative to samples from the aggregate posterior should be uniformly distributed.
+\citet{talts_validating_2018} suggest to inspect rank statistics histograms visually for uniformity. 
+\citet{gandy_unit_2020} propose determining uniformity with a $\chi^2$ test. As simple illustration of the pitfalls of aggregate posterior 
+methods, compare a Gaussian posterior $\pi(\theta\given y) = \mathcal{N}(y, 1)$ given the outcome $y\in \{-1, 1\}$ of a uniform binary variable to the mean-flipped posterior $\tildepi(\theta\given y) = \mathcal{N}(-y, 1)$. 
+Although the latter is incorrect, the aggregated posterior $\tildepi(\theta)$ recovers the prior $\pi(\theta).$
+In more practical terms, if the sampler is wrongly implemented for some inputs in the support of $p(y)$, an aggregate posterior test may fail to detect the error.
+On the other hand, the method of \citet{talts_validating_2018} provides interpretable feedback regarding how the sampler fails, while our tests do not.
+% \citet{talts_validating_2018} and \citet{gandy_unit_2020} alternatively consider the prior recovery requirement on the aggregated posterior $\tildepi(\theta)=\int \tildepi(\theta\given y)p(y)\dd y:$ we expect $\tildepi(\theta)=\pi(\theta)$ if $\tildepi(\theta\given y)=\pi(\theta\given y).$
+% Both works consider the rank of a prior sample relative to samples from the aggregate posterior.
+% The distribution of such rank statistics is (discrete) uniform if the sampler is correct.
+% % Based on the forecast calibration literature \citep{},
+% \citet{talts_validating_2018} suggest to inspect the uniformity of the histogram of rank statistics visually, which help us identify deviation of the sampler from the posterior.
+% \citet{gandy_unit_2020}, in contrast, propose formally conducting a $\chi^2$ test for uniformity. 
+% Note that, in contrast to the joint consistency check, the prior recovery check only examines a necessary condition of $\tildepi(\theta\given y)=\pi(\theta\given y).$
+% Consider the following example: a Gaussian posterior $\pi(\theta\given y) = \mathcal{N}(y, 1)$ with $y\in \{-1, 1\}, $ a uniformly binary random variable $Y,$ and the mean-flipped posterior $\tildepi(\theta\given y) = \mathcal{N}(-y, 1)$. 
+% Although the $\tildepi(\theta\given y)$ is incorrect, the aggregated posterior $\tildepi(\theta)$ recovers the prior $\pi(\theta).$
+% This shows that when the sampler is wrongly implemented for some inputs in the support of $p(y)$, the prior recovery check can fail to detect the error, while our tests may succeed.
+% Nonetheless, the method of \citet{talts_validating_2018} provides interpretable feedback regarding how the sampler fails, while our tests do not.
 
-\cite{talts_validating_2018} and \cite{gandy_unit_2020} alternatively consider the prior recovery requirement on the aggregated posterior $\tildepi(\theta)=\int \tildepi(\theta\given y)p(y)\dd y:$ we expect $\tildepi(\theta)=\pi(\theta)$ if $\tildepi(\theta\given y)=p(\theta\given y).$
-Both works consider the rank of a prior sample relative to samples from the aggregate posterior.
-The distribution of such rank statistics is (discrete) uniform if the sampler is correct.
-Based on the forecast calibration literature \citep{}, \cite{talts_validating_2018} suggest to visually inspect the histogram of rank statistics, which help us identify deviation of the sample from the posterior. 
-\cite{gandy_unit_2020} propose to conduct a uniformity test via the $\chi^2$-test. 
-Note that, in contrast to the joint consistency check, the prior recovery check only examines a necessary condition of $\tildepi(\theta\given y)=\pi(\theta\given y).$
-As an example, consider the following setting: a Gaussian posterior $p(\theta\given y=i) = \mathcal{N}(\mu_i, 1)$ with $i\in \{-1, 1\}, $ an equally-distributed binary random variable $y,$ and the mean-flipped posterior $\tildepi(\theta\given y=i) = \mathcal{N}(\mu_{-i}, 1)$. 
-Although the $\tildepi(\theta\given y)$ is incorrect, the aggregated posterior $\tildepi(\theta)$ recovers the prior $\pi(\theta).$
-This observation implies that when the sampler is wrongly implemented for some inputs (in the support of $p(y)$), the prior recovery check could fail to detect the error.
-On the other hand, the method of \cite{talts_validating_2018} provides interpretable feedback regarding where the sampler fails, while our tests do not.
+{\noindent\bf Other posterior diagnostics}.
+The kernel Stein discrepancy \citep{Chwialkowski2016, Gorham2017, liu_kernelized_2016} is a computable measure of discrepancy between the sampler and a given target, and like Geweke tests can be used to check overall correctness of a sampler. 
+This discrepancy requires additional conditions such as differentiability of the target density; our tests can be used when such requirements are not satisfied, as long as sampling is feasible.
 
-Our work differs from diagnostics for determining the convergence of a sampler to a particular posterior distribution conditioned on observed data; we can only validate a sampler regarding the posterior on data from the model marginal. 
-The kernel Stein discrepancy \citep{Chwialkowski2016, liu_kernelized_2016, Gorham2017} is a computable measure of discrepancy between the sampler and a given target, and can thus be used to conduct implementation check.
-This discrepancy requires additional conditions such as differentiability of the target density; our tests can be used when such conditions do not hold, as long as sampling is feasible.
-Note that other common diagnostics, such as effective sample size, the Gelman-Rubin diagnostic \citep{gelman_inference_1992}, concern the termination of a chain (reaching stationarity) but do not account for asymptotic bias; hence, they cannot be used for implementation testing. 
+{\noindent\bf Convergence diagnostics} test whether a sampler has mixed, under the assumption that it is correct \citep[e.g.][]{robert_short_2011}. They are hence not substitutes for Geweke-style tests. Conversely, since Geweke tests can detect but not identify problems, diagnosing convergence may be the next required step. 
 
 
 \section{Experiments}\label{sec:experiments}
-We conduct three experiments to compare the performance of the MMD-SC and MMD-BC tests to several benchmark methods: the Geweke test and the Kolmogorov-Smirnov and Rank tests from \cite{gandy_unit_2020}. 
-In particular, we wish to verify that our tests' type-I/II error rates fall relatively quickly with sample size. 
+We conduct three experiments to compare the performance of the MMD-SC and MMD-BC tests to several benchmark methods: the Geweke test and the Kolmogorov-Smirnov (KS) and Rank tests from \cite{gandy_unit_2020}. 
+In particular, we wish to verify that our tests' type-II error rates fall relatively quickly with sample size. 
 
 Following are details shared by the experiments below.
 The significance level $\alpha$ is set to $0.05.$
 For the Geweke test and the tests of \cite{gandy_unit_2020}, 
-we use the Benjamini-Hochberg procedure \citep{benjamini_controlling_1995} for multiple testing corrections. 
+we use the Benjamini-Hochberg procedure \citep{benjamini_controlling_1995} for multiple testing correction. 
 For the MMD tests only,
-we normalize the feature scales by dividing each sample feature by the corresponding pooled standard deviation before applying the kernel function. 
-Finally, for the two-sample tests, sample size refers to the number of samples from each distribution; for the other tests, it refers to half of the input samples.
+we normalize real-valued features by dividing each feature by the corresponding pooled standard deviation before applying the kernel function. We use $B=300$ bootstrap samples for all bootstrapping procedures. 
+For the Rank test, we generate $n$ rank statistics. We ran experiments on an internal cluster.
 
 \subsection{Gibbs Sampling}
-We first evaluate test performance on the Gibbs sampler from \cite{gandy_unit_2020}. 
-The generative model is given by
+We first evaluate test performance using a model from \cite{gandy_unit_2020}. 
+The data generating process is specified by the following Gaussian model
 \begin{align}
-    \theta_i &\sim \mathcal{N}(0, \sigma^2), \quad i=1,2 \\
-    y &= \theta_1 + \theta_2 + \epsilon, \quad \epsilon \sim \mathcal{N}(0, \sigma_\epsilon^2)
+    Y \sim \mathcal{N}(\theta_1+\theta_2,\ \sigma^2_{\epsilon}),\quad  \theta_1,\ \theta_2 &\overset{\mathrm{i.i.d.}}{\sim}\mathcal{N}(0, \sigma^2), 
     \label{eq:ex1}
 \end{align}
-with  $\sigma^{2}=100, \sigma_{\epsilon}^{2}=0.1$. Each iteration of the sampler updates $\theta_{1}$ and $\theta_{2}$ in random order
+with $\sigma_{\epsilon}^{2}=0.1$ and $\sigma^{2}=100$. Each iteration of the sampler updates $\theta_{1}$ and $\theta_{2}$ in random order according to 
 \begin{align}
-\theta_{i} \sim \mathcal{N}\left(
-\frac{\sigma^{2}}{\sigma_{\epsilon}^{2}+\sigma^{2}}\left(y-\theta_{j}\right)
-, \frac{1}{\frac{1}{\sigma_{\epsilon}^{2}}+\frac{1}{\sigma^{2}}}\right), \quad i,j=1,2, i \neq j
+\theta_{j} \sim \mathcal{N}\left[
+\frac{\sigma^{2}}{\sigma_{\epsilon}^{2}+\sigma^{2}}\left(y-\theta_{l}\right)
+, \Bigl(\frac{1}{\sigma_{\epsilon}^{2}}+\frac{1}{\sigma^{2}}\Bigr)^{-1}\right]\ \text{where } j \neq l,\ 1\leq j,l\leq 2.
 \end{align}
 
-\begin{table}
-    \caption{Experiment 1 intentional errors in posterior sampler}
-    \label{tab:ex1_errors}
-    \centering
-    \begin{tabular}{l|l|l|l}
-    \toprule
+We introduce two errors into the posterior sampler -- they are more challenging than the ones considered in \cite{gandy_unit_2020}. 
+In the first error, the posterior distribution means are swapped. In the second error, we replace the normal distributions in the Gibbs steps with Laplace distributions preserving the correct means and variance. In summary:
+\begin{center}
+    \begin{tabular}{llll}
           Error & Components & Incorrect & Correct \\
     \midrule  
-         Mean Swap & Means &  $\frac{\sigma^{2}}{\sigma_{\epsilon}^{2}+\sigma^{2}}\left(y-\theta_{i}\right)$ & $\frac{\sigma^{2}}{\sigma_{\epsilon}^{2}+\sigma^{2}}\left(y-\theta_{j}\right)$\\
+         Mean Swap & Means &  $\frac{\sigma^{2}}{\sigma_{\epsilon}^{2}+\sigma^{2}}\left(y-\theta_{j}\right)$ & $\frac{\sigma^{2}}{\sigma_{\epsilon}^{2}+\sigma^{2}}\left(y-\theta_{l}\right)$\\
          Laplace & Distributions & Laplace & Gaussian \\
-    \bottomrule
     \end{tabular}
-\end{table}
+\end{center}
+% We introduce two errors into the posterior sampler -- they are more challenging than the ones considered in \cite{gandy_unit_2020}. 
+% In the first error, the posterior distribution means are swapped. In the second error, we replace the normal distributions in the Gibbs steps with Laplace distributions preserving the correct means and variance. 
+% Table \ref{tab:ex1_errors} summarizes the two errors. 
 
-We introduce two errors into the posterior sampler which are more difficult to detect than the errors introduced in \cite{gandy_unit_2020}. In the first error, the posterior distribution means are swapped. In the second error, we replace the normal distributions in the Gibbs steps with Laplace distributions preserving the correct means and variance. These errors are summarized in Table \ref{tab:ex1_errors}.
+% \begin{table}[b]
+%     \caption{Experiment 1; summary of intentional errors in posterior sampler}
+%     \label{tab:ex1_errors}
+%     \centering
+%     \begin{tabular}{llll}
+%     \toprule
+%           Error & Components & Incorrect & Correct \\
+%     \midrule  
+%          Mean Swap & Means &  $\frac{\sigma^{2}}{\sigma_{\epsilon}^{2}+\sigma^{2}}\left(y-\theta_{j}\right)$ & $\frac{\sigma^{2}}{\sigma_{\epsilon}^{2}+\sigma^{2}}\left(y-\theta_{l}\right)$\\
+%          Laplace & Distributions & Laplace & Gaussian \\
+%     \bottomrule
+%     \end{tabular}
+% \end{table}
 
-To illustrate the importance of the auxiliary features, we first compare the performance of the MMD-BC test against the KS and Rank tests from \cite{gandy_unit_2020}, using different sets of test functions. 
-For the MMD tests, we consider two kernels based on the IMQ kernel $k_{\mathrm{IMQ}}$ with $c=1$ and $\beta=0.5:$ 
-(a) the IMQ kernel with only baseline features $g(y, \theta)$; $k_{\mathrm{IMQ}}(g, \tilde{g})$ and 
-(b) the sum of $k_{\mathrm{IMQ}}(g, \tilde{g})$ and an IMQ kernel with auxiliary features $h(y, \theta)$; $k_{\mathrm{IMQ}}(g, \tilde{g}) + k_{\mathrm{IMQ}}(h, \tilde{h})$. We denote $g=g(y, \theta)$ and $\tilde{g}=g(\tilde{y}, \tilde{\theta})$, with $h$ similarly defined. 
-The baseline test functions for the benchmark tests are $\begin{bmatrix} \theta_{1}, \theta_{2}, \theta_{1}^{2}, \theta_{1}\theta_{2} \end{bmatrix}^\top,$ and each component of $h(y, \theta)$ is used as auxiliary test functions. 
-The results are plotted in Figure \ref{fig:ex1_aux}. Under each error, inclusion of the auxiliary test functions drastically improves performance across the board. The likelihood and prior capture underlying model structure in a way that is otherwise much more difficult to characterize.
+To illustrate the importance of the auxiliary features (see Section \ref{sec:kernel_selection}), we first compare the performance of the MMD-BC test against the KS and Rank tests from \cite{gandy_unit_2020}, using different sets of test functions. 
+For the MMD tests, we consider two kernels based on the inverse quadratic (IMQ) kernel $k_{\text{IMQ}}(x, x') = (c^{2} + \Vert x - x' \Vert_{2}^{2})^{-\beta}$ with $c=1$ and $\beta=1/2:$ 
+(a) the IMQ kernel with baseline features $g(y, \theta)$; $k_{\mathrm{IMQ}}(g, \tilde{g})$ and 
+(b) the sum of $k_{\mathrm{IMQ}}(g, \tilde{g})$ and an IMQ kernel with auxiliary features $h(y, \theta)$; $k_{\mathrm{IMQ}}(g, \tilde{g}) + k_{\mathrm{IMQ}}(h, \tilde{h})$. 
+Here, we denote $g=g(y, \theta)\coloneqq[y, \theta]^{\top}$ and $\tilde{g}=g(\tilde{y}, \tilde{\theta})$, with $h(y, \theta)\coloneqq[p(y|\theta), \pi(\theta)]$ similarly defined. 
+The baseline test functions for the benchmark tests are $\begin{bmatrix} \theta_{1}, \theta_{2}, \theta_{1}^{2}, \theta_{1}\theta_{2} \end{bmatrix}^\top,$ and each component of $h(y, \theta)$ is used as an auxiliary test function. 
+The results are plotted in Figure \ref{fig:ex1_aux}. Under each sampler error, inclusion of the auxiliary test functions improves performance across the board. 
+The likelihood and prior capture underlying model structure in a way that is otherwise much more difficult to characterize.
 
 \begin{figure}
     \centering
     \includegraphics[width=\textwidth]{figures/results_1.png}
     \caption{
-        Experiment 1 type-I/II error rates of BC tests with varying test functions, calculated over 1000 trials. 
-        For the BC simulator, we set $L=500$.
-        For the benchmark Rank test, we set $\tilde{L}=5$.
+        Experiment 1 type-I/II error rates of BC tests with varying test functions over 1000 trials. 
+        The red flat line in the left panel indicates the significance level $\alpha=0.05$. 
+        For the BC simulator, we set the burn-in size $L=500$.
+        The Rank test computes a rank statistic based on $\tilde{L}=5$ samples.
     }
     \label{fig:ex1_aux}
 \end{figure}
 
-When $\sigma_{\epsilon} \ll \sigma$, the sample autocorrelation in the successive conditional sampler is very high, and successive-conditional tests require many more samples than backwards-conditional tests to push their type-I error rates below $\alpha=0.05$. Tuning $\sigma_{\epsilon}$ thus enables analysis of test behavior given samplers with varying mixing speeds (see Appendix). As we might expect, when the sample autocorrelation is very high, the MMD-SC and Geweke tests always reject the null hypothesis. As $\sigma_{\epsilon}$ increases and the autocorrelation falls, their type-I error rates fall. Type-II error rates improve across all tests with mixing speed.
+We observed that when $\sigma_{\epsilon} \ll \sigma$, the sample autocorrelation in the successive conditional sampler is very high, and successive-conditional tests require many more samples than backwards-conditional tests to push their type-I error rates below $\alpha=0.05$. Tuning $\sigma_{\epsilon}$ thus enables analysis of test behavior given samplers with varying mixing speeds (see Appendix \ref{appendix:ex1a}). When the sample autocorrelation is very high, the MMD-SC and Geweke tests almost always reject the null hypothesis; their elevated type-I error rates can be fixed by drawing more samples or by tweaking the window size and wild bootstrap parameters, respectively. As $\sigma_{\epsilon}$ increases and the autocorrelation falls, the required adjustments become smaller; however, it is challenging to set these parameters correctly beforehand. Type-II error rates improve across all tests with mixing speed.
 
 \subsection{Reversible-jump Bayesian Lasso}
 \label{section:ex2}
-This example is similar to \cite{chen_bayesian_2011}, but replaces improper priors with proper ones. Given a fixed design matrix $X$ and observed outcomes $y$, we wish to learn the distribution of the parameters $\beta$ and $\sigma$ under the sparse linear model
+We next consider a Bayesian Lasso model similar to \cite{chen_bayesian_2011}. 
+Here, for a fixed design matrix $\mathbf{X}\in \mathbb{R}^{m\times d}$ with $m, d \geq 1,$ we model its associated outcome variable $Y$ with  
+a linear regression model
 \begin{equation}
-    y = X\beta + \mathbf{\epsilon}, \quad \mathbf{\epsilon} \sim \mathcal{N}(\mathbf{0}, \sigma^{2} \mathbf{I})
+    Y = \mathbf{X}{\beta} + \mathbf{\epsilon}, \quad \mathbf{\epsilon} \sim \mathcal{N}(\mathbf{0}, \sigma^{2} \mathbf{I}), 
     \label{eq:ex2}
 \end{equation}
-We place a truncated Poisson prior $p(\ell|\lambda)$ on the number of nonzero coefficients $\beta_{j}$ and an inverse-gamma prior on $\sigma^{2}$. Because the number of nonzero coefficients $\beta_{j}$ in \eqref{eq:ex2} is unknown, the algorithm must draw from parameter spaces of varying dimension. We implement a reversible-jump step \citep{green_reversible_1995} based on \cite{chen_bayesian_2011} that achieves this; see the Appendix for full details. We fix $X \in \mathbb{R}^{3 \times 3}$, with $\lambda=1$ and hyperparameters $\tau=1, a=3, b=1$. The reversible jump random walk sizes are set to $\epsilon_\text{update}= \epsilon_\text{birth}=1$.
+where ${\beta} = [\beta_1, \dots, \beta_d]^{\top} \in \mathbb{R}^d$ are sparse coefficients, $\sigma>0,$ and $\mathbf{I}$ is the identity matrix. 
+To define a Bayesian model, we place a truncated Poisson prior on the number $\ell$ of nonzero elements in $\beta$ and an inverse-gamma prior on $\sigma^{2}$ with hyperparameters $a, b$. 
+The model draws a combination $\gamma$ of $\ell$ integers from $\{1,\dots, d\}$, uniformly from all the combinations, to choose nonzero coefficients $\{\beta_{j}\}_{j\in \gamma}$.
+The selected weights $\{\beta_{j}\}_{j\in \gamma}$ are then independently drawn from a Laplace distribution with scale $\tau$. 
 
-Each iteration of the reversible-jump MCMC posterior sampler takes two steps in random order. A Gibbs step updates $\sigma^{2}$, which is straightforward due to the conjugacy of the Inverse Gamma prior on $\sigma^{2}$. A reversible jump step that traverses parameter spaces with varying $\ell$. We accept the birth-death proposal $\theta'$ with probability 
+% The prior is thus
+% \begin{equation}
+%   \pi(\theta=(\beta, \sigma)|\tau, a, b ) = p(\ell|\lambda) p(\mathbf{\gamma}|\ell) p(\sigma^{2} | a, b) \prod_{j=1}^d p(\beta_{j} | \tau, \gamma). 
+% \end{equation}
+For observed outcomes $y$, the model is used to infer the parameters $\theta = (\beta, \sigma)$.
+Because the number of nonzero coefficients in \eqref{eq:ex2} is unknown, the algorithm must draw from parameter spaces of varying dimension. 
+We implement a reversible-jump step \citep{green_reversible_1995} based on \cite{chen_bayesian_2011}; see Appendix \ref{appendix:ex2} for full details. 
+The reversible jump random walk sizes are set to $\epsilon_\text{update}= \epsilon_\text{birth}=1$. Each iteration of the reversible-jump MCMC posterior sampler takes two steps in random order. A Gibbs step updates $\sigma^{2}$, which is straightforward due to the conjugacy of the inverse gamma prior on $\sigma^{2}$. A reversible-jump step traverses parameter spaces with varying $\ell$. 
+We accept the birth-death proposal $\tilde{\theta}$ with probability 
 \begin{equation}
-    A(\theta'|\theta) = \min{\left(\frac{p(y, \theta' | X )}{p(y, \theta | X )} \frac{p(\theta' \rightarrow \theta)}{p(\theta \rightarrow \theta')}, 1\right)} \\
+    A(\tilde{\theta}|\theta) = \min{\left(\frac{p(y, \tilde{\theta} | X, \tau, a, b )}{p(y, \theta | X, \tau, a, b )} \frac{p(\tilde{\theta} \rightarrow \theta)}{p(\theta \rightarrow \tilde{\theta})}, 1\right)}.
 \end{equation}
 
-We introduce several errors into the the posterior sampler summarized in Table \ref{tab:ex2_errors}. The first error affects the Metropolis-Hastings acceptance probabilities used in the birth/death moves; it omits the jump probabilities $p(\theta' \rightarrow \theta), p(\theta \rightarrow \theta')$ from the calculation. The second error affects all of the Metropolis-Hastings acceptance probabilities. The truncated Poisson factors $p(\ell|\lambda)$  of the joint probabilities have incorrect denominator $(\ell-1)!$ rather than $\ell!$. 
-For the MMD tests, we use the same kernel as in the previous experiment;  $k_{\mathrm{IMQ}}(g, \tilde{g}) + k_{\mathrm{IMQ}}(h, \tilde{h})$. The benchmark tests use all first and second moments of $\{\beta,\sigma\}$ and the evaluations of the likelihood and prior.
-The results are shown in Figure \ref{fig:ex2_comparison}.
-
-The autocorrelation in the successive-conditional samples results in elevated rejection rates for the Geweke test. Despite using the same samples, the MMD-SC test better controls type-I error rates. Its type-II error rates are decidedly worse than the other tests, however. Due to the independence of their samples, the other backwards-conditional tests are most efficient.
-
-\begin{table}
-    \caption{Experiment 2 intentional errors in posterior sampler}
-    \label{tab:ex2_errors}
-    \centering
-    \begin{tabular}{l|l|l|l}
-    \toprule
-          Error & Components & Incorrect & Correct \\
+We introduce two errors into the the posterior sampler: One affects the Metropolis-Hastings acceptance probabilities used in the birth/death moves; it omits the jump probabilities $p(\tilde{\theta} \rightarrow \theta), p(\theta \rightarrow \tilde{\theta})$ from the calculation. The second error affects all of the Metropolis-Hastings acceptance probabilities. The truncated Poisson factors $p(\ell|\lambda)$  of the joint probabilities have incorrect denominator $(\ell-1)!$ rather than $\ell!$. In summary:
+\begin{center}
+   \begin{tabular}{llll}
+                  Error & Components & Incorrect & Correct \\
     \midrule  
-         Transition & $A_{\text{birth}}(\theta'|\theta)$, $A_{\text{death}}(\theta'|\theta)$  &  $\ldots\frac{P(y, \theta' | X )}{P(y, \theta | X )}\ldots$ & $\ldots\frac{P(y, \theta' | X )}{P(y, \theta | X )} \frac{P(\theta' \rightarrow \theta)}{P(\theta \rightarrow \theta')}\ldots$\\
-         Poisson & $P(y, \theta' | X )$, $P(y, \theta | X )$ & $\ldots \frac{\exp{(-\lambda)} \lambda^{\ell}}{(\ell-1)!} \ldots$ & $\ldots \frac{\exp{(-\lambda)} \lambda^{\ell}}{\ell!} \ldots$ \\
-    \bottomrule
-    \end{tabular}
-\end{table}
+         Transition & $A_{\text{birth}}(\tilde{\theta}|\theta)$, $A_{\text{death}}(\tilde{\theta}|\theta)$  &  $\ldots\frac{p(y, \tilde{\theta} | X )}{p(y, \theta | X )}\ldots$ & $\ldots\frac{p(y, \tilde{\theta} | X )}{p(y, \theta | X )} \frac{p(\tilde{\theta} \rightarrow \theta)}{p(\theta \rightarrow \tilde{\theta})}\ldots$\\
+         Poisson & $p(y, \tilde{\theta} | X )$, $p(y, \theta | X )$ & $\ldots \frac{\exp{(-\lambda)} \lambda^{\ell}}{(\ell-1)!} \ldots$ & $\ldots \frac{\exp{(-\lambda)} \lambda^{\ell}}{\ell!} \ldots$ \\
+\end{tabular}
+\end{center}    
 
-\begin{figure}[H]
+
+For the MMD tests, we use the same kernel as in the previous experiment: $k_{\mathrm{IMQ}}(g, \tilde{g}) + k_{\mathrm{IMQ}}(h, \tilde{h})$. The benchmark tests use all first and second moments of $\{\beta,\sigma\}$ and the evaluations of the likelihood and prior.
+We fix $m=d=3$ with $\lambda=1$, and use hyperparameters $\tau=1$, $a=3,$ and $b=1$. 
+The results are shown in Figure \ref{fig:ex2_comparison}. The autocorrelation in the successive-conditional samples results in elevated rejection rates for the Geweke test. Despite using the same samples, the MMD-SC test better controls type-I error rates. Its type-II error rates are decidedly worse than the other tests, however. Due to the independence of their samples, the backwards-conditional tests are generally more efficient. The MMD-BC trails the KS test, implying that the test functions align with the errors.
+
+% \begin{table}[b]
+%     \caption{Experiment 2; summary of intentional errors in posterior sampler}
+%     \label{tab:ex2_errors}
+%     \centering
+%     \begin{tabular}{llll}
+%     \toprule
+%           Error & Components & Incorrect & Correct \\
+%     \midrule  
+%          Transition & $A_{\text{birth}}(\tilde{\theta}|\theta)$, $A_{\text{death}}(\tilde{\theta}|\theta)$  &  $\ldots\frac{p(y, \tilde{\theta} | X )}{p(y, \theta | X )}\ldots$ & $\ldots\frac{p(y, \tilde{\theta} | X )}{p(y, \theta | X )} \frac{p(\tilde{\theta} \rightarrow \theta)}{p(\theta \rightarrow \tilde{\theta})}\ldots$\\
+%          Poisson & $p(y, \tilde{\theta} | X )$, $p(y, \theta | X )$ & $\ldots \frac{\exp{(-\lambda)} \lambda^{\ell}}{(\ell-1)!} \ldots$ & $\ldots \frac{\exp{(-\lambda)} \lambda^{\ell}}{\ell!} \ldots$ \\
+%     \bottomrule
+%     \end{tabular}
+% \end{table}
+
+\begin{figure}
     \centering
     \includegraphics[width=\textwidth]{figures/results_2.png}
-    \caption{Experiment 2 type-I/II error rates calculated over 1000 trials with $\alpha=0.05$.
-    We set $j=5$ for the SC simulator, and $L=500$ for both the SC and BC simulators. For the benchmark Rank test, we set $\tilde{L}=5$. The Geweke window size was set to $8\%$ of the sample size.
+    \caption{Experiment 2 type-I/II error rates over 1000 trials. 
+    The red flat line in the left panel indicates the significance level $\alpha=0.05$. 
+    We set the thinning size $t=5$ for the SC simulator, and $L=500$ for both the SC and BC simulators. For the Rank test, we set the burn-in size $\tilde{L}=5$. We set the Geweke window size to $8\%$ of the sample size.
     }
     \label{fig:ex2_comparison}
 \end{figure}
 
-\subsection{Metropolis-Hastings for Learning DAG Structure}
-The purpose of this experiment is to show that the MMD tests can be easily generalized to spaces other than $\mathbb{R}^{d}$ on which we can define a kernel. We are interested in inferring the structure $\mathcal{G}$ of a directed acyclic graph (DAG) given observed data. $\mathcal{G}=(V,E)$ is a set of vertices (nodes) and edges encoding conditional independence relationships between nodes. In particular, the value of a child node $y_{j}$ depends only on the value of its parent nodes. A node with no parents is called a root, and a node with no children is called a leaf. A graph structure may thus be represented by an adjacency matrix; entry $(i,j)=1$ indicates that $y_{i}$ is the parent of child node $y_{j}$; $(i,j)=0$ otherwise. In an acyclic graph structure, a node cannot be a descendant of itself.
+\subsection{Metropolis-Hastings for Learning DAG Structure} \label{sec:graphexp}
+We consider a graph structure to demonstrate that the MMD tests can be easily generalized to non-Euclidean domains with a suitable kernel.
+% We consider a simple model to infer the structure $\mathcal{G}$ of a directed acyclic graph (DAG) underlying observed data; 
+Suppose that data $Y=(Y^1, \dots, Y^d)$ takes values in $\mathbb{R}^d.$ 
+We use a model specified by a directed acyclic graph (DAG) $\mathcal{G}$, where 
+$\mathcal{G}$ is a set of $d$ nodes and directed edges; 
+each node represents a component of $Y$ and edges encode conditional independence relationships between node variables. 
+% A root node has no parents. Note that in acyclic graphs, a node cannot be descended from itself. 
+The generative process is defined as follows. 
+We represent a DAG $\mathcal{G}$ by a $d\times d$ adjacency matrix; entry $(i,j)=1$ indicates that node $i$ is the parent of child node $j$, and $(i,j)=0$ otherwise. 
+We set a uniform prior $\pi(\mathcal{G}) \propto 1,$ which may be sampled from using the algorithm in \cite{kuipers_uniform_2015}. 
+% Let $\mathbf{pa}(y)$ denote the set of parent nodes of node $y$. 
+Given a DAG $\mathcal{G}$, we draw each root node variable from $\mathcal{N}(0, \epsilon^2)$, and each child node $Y^{c}$ from $\mathcal{N}(\sum_{z \in \mathbf{p}_c} z, \epsilon^2)$ with $\mathbf{p}_c$ the set of parent nodes of the child node $c.$ 
+% The likelihood is thus $    p(y|\mathcal{G}) = \prod_{j=1}^{n}  p(y_{j}|\mathcal{G}) = \prod_{j=1}^{n} p(y_{j}|\mathbf{pa}(y_{j}))$.
 
-Let $\mathbf{pa}(y_{j})$ denote the set of parent nodes of node $y_{j}$. In this experiment, we place a uniform  prior on the structure; $\pi(\mathcal{G}) \propto 1$. Given structure $\mathcal{G}$ and data $y$, we draw each root node $y_{r} \sim \mathcal{N}(0, \epsilon^2)$ and each child node $y_{j}|\mathbf{pa}(y_{j}) \sim \mathcal{N}(\sum_{z \in \mathbf{pa}(y_{j})} z, \epsilon^2)$. The likelihood is thus
+To infer $\mathcal{G}$ given observed data, we use the MCMC algorithm detailed in Section 2 of \cite{grzegorczyk_improving_2008}; 
+Given a structure $\mathcal{G}$, the proposal structure $\mathcal{G}'$ is sampled uniformly from the neighborhood $\mathbf{Ne}(\mathcal{G})$, the union of $\mathcal{G}$ and the set of all DAGs that can be reached by adding, deleting, or reversing an edge. 
+We consider a sampler error affecting the Metropolis-Hastings acceptance probability
 \begin{equation}
-    p(y|\mathcal{G}) = \prod_{j=1}^{n}  p(y_{j}|\mathcal{G}) = \prod_{j=1}^{n} p(y_{j}|\mathbf{pa}(y_{j}))
+A(\tilde{\mathcal{G}}|\mathcal{G}) = \min{\left(\frac{p(y|\tilde{\mathcal{G}})|\mathbf{Ne}(\mathcal{G})|}{p(y|\mathcal{G})|\mathbf{Ne}(\tilde{\mathcal{G}})|}, 1\right)}. \label{eq:exp_graph_mh}
 \end{equation}
-
-The sampling algorithm we consider is detailed in section 2 of \cite{grzegorczyk_improving_2008}. 
-Given a graph structure $\mathcal{G}$, the proposal structure $\mathcal{G}'$ is sampled uniformly from the neighborhood $\mathbf{Ne}(\mathcal{G})$, the union of $\mathcal{G}$ and the set of all DAGs that can be reached by adding, deleting, or reversing an edge. We use the method of \cite{kuipers_uniform_2015} to sample DAGs uniformly.
-
-The sampler errors considered all affect the Metropolis-Hastings acceptance probability.
-\begin{equation}
-A(\mathcal{G}'|\mathcal{G}) = \min{\left(\frac{p(y|\mathcal{G}')|\mathbf{Ne}(\mathcal{G})|}{p(y|\mathcal{G})|\mathbf{Ne}(\mathcal{G}')|}, 1\right)}
-\end{equation}
-Specifically, they alter the calculation of $|\mathbf{Ne}(\mathcal{G})|$. In the first error, we count all \textit{graphs} that can be reached by modifying a single edge, regardless of whether the modification induces a cycle. In the subtler second error, we double-count the DAGs that can be reached by reversing an edge. These errors are summarized in Table \ref{tab:ex3_errors}.
-
-We examine two sets of tests: one on $\mathbb{R}^{d}$ and the other on the space of DAGs. For the former, we treat each entry in the adjacency matrix representation of the sampled graph structure $\mathcal{G}$ as a binary parameter. Since the parameters are discrete, we cannot apply the KS or Rank tests as benchmarks. For the Geweke test, we use a subset of the the first and second moments of these parameters as test functions; all moments that must be zero for the graph to be cyclic are excluded. We include the evaluation of the likelihood $p(y|\mathcal{G})$ and omit the evaluation of the uniform prior $\pi(\mathcal{G})$ as it is constant. The MMD test functions use the IMQ sum kernel from previous experiments.
-
-Using the adjacency matrix representation, the number of test functions scales poorly with graph size; for example, just the first moments are $\mathcal{O}(n^2)$, and including the second moments is $\mathcal{O}(n^4)$. Thus, the Geweke test will lose power from conducting and correcting for so many tests. The rapidly scaling dimensionality of the problem also will pose problems for the MMD tests. However, unlike the Geweke test, the MMD tests can be adapted to these settings using kernels on graphs; we chose random walk kernels \citep{gartner_graph_2003, vishwanathan_fast_2006}. As a final benchmark in DAG space, we also include a $\chi^{2}$ test of backwards-conditional sample DAG frequencies; this is an idealized test since it uses true expected frequencies. The results are shown in Figure \ref{fig:ex3_comparison}. 
-
-As we might expect, the $\chi^{2}$ test performs best. The Geweke test lags far behind, but does reasonably well; the test functions are enough capture the errors. The MMD tests using the adjacency matrix features perform worst; the problem is too high-dimensional in $\mathbb{R}^{d}$ for the tests to be very efficient. In contrast, using the random walk kernel, the MMD tests are able outperform the Geweke test in detecting the Cyclic Check error, almost matching the $\chi^{2}$ test; however, the Rev Count type-II error degrades. In fact, random walk kernels cannot distinguish between isomorphic graphs.
-
-To the extent that we wish to perform tests directly on the DAG space, the $\chi^{2}$ test is strictly superior to the graph kernel MMD tests; it is consistent and much faster. On the other hand, testing only on the DAG space also will miss discrepancies in the relationship between $\mathcal{G}$ and $y$. Trivially, if our posterior sampler used a uniform proposal distribution but wrongly set the acceptance probability to unity, none of these tests would pick up on the error, which would instead influence the likelihood feature. A preferable way to check the structure sampler would thus be to run the $\chi^{2}$ test on the sampled structures along with the KS test on the auxiliary features.
-
-Here, the DAG space is discrete and thus the $\chi^{2}$ test is a better choice, but the MMD tests may also be applied to MCMC schemes on continuous domains such as random matrices \citep{beskos_mcmc_2021} or functions \citep{jeltsch_mcmc_2009}, given the right kernel. \ajsay{todo: cite examples of kernels on random matrices / functions...} 
-The primary concern outside of $\mathbb{R}^{d}$ is that, if we do not have access to characteristic kernels, the consistency of the MMD tests is consequently not guaranteed. However, the tests may still protect against some mistakes.
-
-\begin{table}
-    \caption{Experiment 3 intentional errors in posterior sampler}
-    \label{tab:ex3_errors}
-    \centering
-    \begin{tabular}{l|l|l|l}
-    \toprule
-          Error & Components & Incorrect & Correct \\
+Specifically, it alters the calculation of the number of the neighborhood nodes $|\mathbf{Ne}(\mathcal{G})|$: we count all \textit{graphs} that can be reached by modifying a single edge, regardless of whether the modification induces a cycle. 
+\begin{center}
+    \begin{tabular}{llll}
+    Error & Components & Incorrect & Correct \\
     \midrule  
          Cyclic Check & $|\mathbf{Ne}(\mathcal{G})|, |\mathbf{Ne}(\mathcal{G}')|$ & Count graph neighbors & Count DAG neighbors \\
-         Rev Count & $|\mathbf{Ne}(\mathcal{G})|, |\mathbf{Ne}(\mathcal{G}')|$ & Count reversals twice & Count reversals once \\
-    \bottomrule
+        %  Rev Count & $|\mathbf{Ne}(\mathcal{G})|, |\mathbf{Ne}(\mathcal{G}')|$ & Count reversals twice & Count reversals once \\
     \end{tabular}
-\end{table}
+\end{center}
+% In the first error, we count all \textit{graphs} that can be reached by modifying a single edge, regardless of whether the modification induces a cycle. In the subtler second error, we double-count the DAGs that can be reached by reversing an edge. 
 
+% \begin{table}[t]
+%     \caption{Experiment 3; summary of intentional errors in posterior sampler}
+%     \label{tab:ex3_errors}
+%     \centering
+%     \begin{tabular}{llll}
+%     \toprule
+%           Error & Components & Incorrect & Correct \\
+%     \midrule  
+%          Cyclic Check & $|\mathbf{Ne}(\mathcal{G})|, |\mathbf{Ne}(\mathcal{G}')|$ & Count graph neighbors & Count DAG neighbors \\
+%         %  Rev Count & $|\mathbf{Ne}(\mathcal{G})|, |\mathbf{Ne}(\mathcal{G}')|$ & Count reversals twice & Count reversals once \\
+%     \bottomrule
+%     \end{tabular}
+% \end{table}
 
-\begin{figure}
+We examine two sets of tests: one with Euclidean features and the other with graph features. 
+For the former, we treat each entry in the adjacency matrix of the sampled graph $\mathcal{G}$ as a binary parameter and use the likelihood $p(y|\mathcal{G})$ as our auxiliary test function. 
+For the Geweke test, we use a subset of the the first and second moments of these parameters as test functions; we exclude duplicate moments and all moments that must be zero for the graph to be acyclic. 
+The KS test uses the same test functions with a permutation bootstrap to simulate the null parameter distributions.
+For the MMD tests, we use the IMQ sum kernel from previous experiments and center the adjacency matrix entries around zero to avoid disappearing terms in the IMQ kernel evaluations. 
+%%%%%%%%%%%%%%%%%%
+% the following details should be used for interpreting the results, but not for providing experiment specifics 
+% Under the adjacency matrix representation, the number of first and second moments is quadratic in the number of nodes; the Geweke test will eventually lose power from multiple testing corrections, as the number of node variables increases. 
+% For the MMD tests, the number of test functions scales quadratically; the high dimension will shrink the test statistic and reduce power.
+%%%%%%%%%%%%%%%%%%
+
+For the latter, we consider the MMD tests with the random walk (RW) kernel \citep{gartner_graph_2003, vishwanathan_fast_2006} implemented in \cite{siglidis_grakel_2020}. 
+We also considered a sum of normalized kernels $(\tilde{k}(x, x') = k(x, x')/\sqrt{k(x,x) k(x',x')})$ to combine the RW, joint IMQ, and auxiliary IMQ kernels; the results were similar to the the foregoing IMQ-kernel MMD tests and are therefore omitted. Another benchmark is the rank test, using a random tiebreak to sort the generated graphs directly as well as the likelihood. 
+As an idealized benchmark in the graph space, we include a $\chi^{2}$ test of backwards-conditional sample DAG frequencies; this uses the true prior frequencies, which should be recovered by the aggregated posterior.
+\begin{figure}[t]
     \centering
     \includegraphics[width=\textwidth]{figures/results_3.png}
-    \caption{Experiment 3 type-I/II error rates calculated over 300 trials with $\alpha=0.05$. We set $j=5$ for the SC simulator, and $L=500$ for both the SC and BC simulators. The Geweke window size was set to $8\%$ of the sample size.
+    \caption{Experiment 3 type-I/II error rates over 500 trials. 
+    The red flat line in the left panel indicates the significance level $\alpha=0.05$. 
+    The thinning size $t$ is set to $5$ for the SC simulator, and the burn-in size $L=500$ is used for both the SC and BC simulators. The Geweke window size was set to $8\%$ of the sample size. 
     }
     % For the Geweke test, we use a subset of the the first and second moments of these parameters as test functions; all moments that must be zero for the graph to be cyclic are excluded.
     \label{fig:ex3_comparison}
 \end{figure}
+Figure \ref{fig:ex3_comparison} shows the results. 
+The Geweke test outperforms the MMD tests with the IMQ kernel; in contrast, using the RW kernel, the MMD tests outperform the Geweke test and even the $\chi^{2}$ test in detecting the Cyclic Check error. 
 
+\section{Conclusion}
+\label{sec:conclusion}
+We have developed a nonparametric extension of Geweke's test using the MMD.   
+The advantage of the new test is its simplicity; with a suitable kernel, the test does not require manual specification of test functions and is not limited to Euclidean space, while care needs to be taken otherwise. The trade-off, however, is that characteristic kernels are challenging to compute in certain domains.
+For example, in graphs the delta kernel examining if two graphs are identical is computationally intractable for large graphs. 
+RW kernels, and other fast alternatives, cannot distinguish between isomorphic graphs. 
+With an RW kernel, when the null hypothesis is not rejected even with a large sample, it should be understood that the joint distributions could still have differences indiscernible to the test. 
+In fact, we found that the MMD test with the RW kernel in Section \ref{sec:graphexp} had low power when slightly increasing only the reversal counts in the neighborhood in \eqref{eq:exp_graph_mh}. 
+Such limitations, however, may not matter if the posterior is invariant under graph isomorphisms. 
+In sum, when choosing a kernel, the user should take into account what features the test can distinguish with it, and whether those features are relevant to the problem; the test result should be interpreted accordingly. 
+Finally, the test inherits limitations and caveats of frequentist hypothesis testing; e.g., the $p$-value is not the probability of the null hypothesis being true, and non-rejection of the null does not imply that the null is true. 
+% The advantage of the MMD tests here is its simplicity; we can apply the same tests in $\mathbb{R}^{d}$, graph space, or a mix of the two; all we need to do is change the kernel. 
+% In fact, random walk kernels cannot distinguish between isomorphic graphs.
+% The primary concern outside of $\mathbb{R}^{d}$ is that, if we do not have access to characteristic kernels, the consistency of the MMD tests is not guaranteed.
+% Note that this lack of consistency is shared by the benchmark tests. While the $\chi^{2}$ test performs best in the Rev Count type-II error, offering a consistent test of the aggregate posterior for a linear computational cost, prior recovery is not sufficient for sampler correctness, as discussed in Section \ref{related:work}. 
+% In addition, it may only be applied when the parameter space is discrete. Similarly, the Geweke test is limited by its test functions. 
+% Taking the sum kernel composed of the random walk, joint IMQ, and auxiliary IMQ kernels, with normalized components of the form $\tilde{k}(x, x') = k(x, x')/\sqrt{k(x,x) k(x',x')}$, gave similar results to the IMQ sum kernel.
 
 \section{Broader Impact}
-MCMC algorithms are commonly used across the natural and social sciences. However, they can be quite complex and error-prone. Compared to previous methods, our MCMC tests come with improved theoretical guarantees based on kernels and thus are of practical use to both researchers and practitioners. They may improve the quality of related academic literature by preventing the propagation of erroneous inferences, as well as easing correction of hitherto undetected mistakes.
+\label{sec:impact}
+MCMC algorithms are commonly used across the natural and social sciences. However, they can be quite complex and error-prone. Compared to other methods, our diagnostics come with improved theoretical guarantees as well as wider and more convenient applicability; they are thus are of practical use to both researchers and practitioners. They may reduce error propagation in related academic literature by easing detection of existing mistakes and preventing the introduction of new ones.
 
 % \subsection{Style}
 
@@ -1003,191 +1097,66 @@ Do {\bf not} include this section in the anonymized submission, only in the fina
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section*{Checklist}
 
-%%% BEGIN INSTRUCTIONS %%%
-The checklist follows the references.  Please
-read the checklist guidelines carefully for information on how to answer these
-questions.  For each question, change the default \answerTODO{} to \answerYes{},
-\answerNo{}, or \answerNA{}.  You are strongly encouraged to include a {\bf
-justification to your answer}, either by referencing the appropriate section of
-your paper or providing a brief inline description.  For example:
-\begin{itemize}
-  \item Did you include the license to the code and datasets? \answerYes{See Section~\ref{gen_inst}.}
-  \item Did you include the license to the code and datasets? \answerNo{The code and the data are proprietary.}
-  \item Did you include the license to the code and datasets? \answerNA{}
-\end{itemize}
-Please do not modify the questions and only use the provided macros for your
-answers.  Note that the Checklist section does not count towards the page
-limit.  In your paper, please delete this instructions block and only keep the
-Checklist section heading above along with the questions/answers below.
-%%% END INSTRUCTIONS %%%
+% %%% BEGIN INSTRUCTIONS %%%
+% The checklist follows the references.  Please
+% read the checklist guidelines carefully for information on how to answer these
+% questions.  For each question, change the default \answerTODO{} to \answerYes{},
+% \answerNo{}, or \answerNA{}.  You are strongly encouraged to include a {\bf
+% justification to your answer}, either by referencing the appropriate section of
+% your paper or providing a brief inline description.  For example:
+% \begin{itemize}
+%   \item Did you include the license to the code and datasets? \answerYes{See Section~\ref{gen_inst}.}
+%   \item Did you include the license to the code and datasets? \answerNo{The code and the data are proprietary.}
+%   \item Did you include the license to the code and datasets? \answerNA{}
+% \end{itemize}
+% Please do not modify the questions and only use the provided macros for your
+% answers.  Note that the Checklist section does not count towards the page
+% limit.  In your paper, please delete this instructions block and only keep the
+% Checklist section heading above along with the questions/answers below.
+% %%% END INSTRUCTIONS %%%
 
 \begin{enumerate}
 
 \item For all authors...
 \begin{enumerate}
   \item Do the main claims made in the abstract and introduction accurately reflect the paper's contributions and scope?
-    \answerTODO{}
+    \answerYes{}
   \item Did you describe the limitations of your work?
-    \answerTODO{}
+    \answerYes{}
   \item Did you discuss any potential negative societal impacts of your work?
-    \answerTODO{}
+    \answerNA{}
   \item Have you read the ethics review guidelines and ensured that your paper conforms to them?
-    \answerTODO{}
+    \answerYes{See Section \ref{sec:conclusion}}
 \end{enumerate}
 
 \item If you ran experiments...
 \begin{enumerate}
   \item Did you include the code, data, and instructions needed to reproduce the main experimental results (either in the supplemental material or as a URL)?
-    \answerTODO{}
+    \answerYes{Will be included in supplemental material}
   \item Did you specify all the training details (e.g., data splits, hyperparameters, how they were chosen)?
-    \answerTODO{}
+    \answerYes{Any additional details will be included in supplemental materials}
 	\item Did you report error bars (e.g., with respect to the random seed after running experiments multiple times)?
-    \answerTODO{}
+    \answerNA{}{}
 	\item Did you include the total amount of compute and the type of resources used (e.g., type of GPUs, internal cluster, or cloud provider)?
-    \answerTODO{}
+    \answerNA{}
 \end{enumerate}
 
 \item If you are using existing assets (e.g., code, data, models) or curating/releasing new assets...
 \begin{enumerate}
   \item If your work uses existing assets, did you cite the creators?
-    \answerTODO{}
+    \answerYes{Cited \cite{siglidis_grakel_2020}}
   \item Did you mention the license of the assets?
-    \answerTODO{}
+    \answerYes{Will be included in supplemental materials}
   \item Did you include any new assets either in the supplemental material or as a URL?
-    \answerTODO{}
+    \answerYes{Will be included in supplemental materials}
   \item Did you discuss whether and how consent was obtained from people whose data you're using/curating?
-    \answerTODO{}
+    \answerNA{}
   \item Did you discuss whether the data you are using/curating contains personally identifiable information or offensive content?
-    \answerTODO{}
+    \answerNA{}
 \end{enumerate}
 
 \end{enumerate}
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-\appendix
-
-\section{Baseline methods}
-\subsection{Geweke test}
-The Geweke test \citep{geweke_getting_2004} compares (estimates of) the expectations of hand-picked features (\emph{test functions}) under both the forward and backward joints. 
-Specifically, let $g: \mathcal{Y}\times \Theta\to \mathbb{R}$ denote a test function, and let  $S_f=\{(y_i, \theta_i)\}_{i=1}^n$ be samples from the forward joint and $S_b=\{(\tilde{y}_i, \tilde{\theta}_i)\}_{i=1}^n$ be ones from the backward joint.
-Then, the z-score 
-% $\sqrt{n}(\hat{\bar{g}} - \hat{\tilde{g}})/\sqrt{\hat{\sigma^{2}}+\hat{\tilde{\sigma}}^{2}}$
-\begin{equation}
-    \frac{\bar{g}(S_f) - \bar{g}(S_b)}{\sqrt{ \frac{\hat{\sigma}^{2}}{N} + \frac{\hat{\tilde{\sigma}}^{2}}{N}}} 
-    % \xrightarrow[]{d} \mathcal{N}(0, 1)
-    \label{eq:geweke}
-\end{equation}
-asymptotically follows the standard Gaussian if $\tilde{\pi}(\theta\given y)=\pi(\theta\given y)$, where $\bar{g}(S) = \frac{1}{n}\sum_{(y,\theta) \in S}g(y, \theta)$ and $\hat{\sigma}, \hat{\tilde{\sigma}}$ are estimated variances. 
-The width of the window estimator $\hat{\tilde{\sigma}}$ can be set to account for the serial dependence in the backward joint samples.
-\subsection{\cite{talts_validating_2018}}
-% \cite{talts_validating_2018} take a similar approach under the assumption that the posterior is absolutely continuous.
-The authors draw samples using the BC algorithm, then compute univariate rank statistics of a draw from the prior among the thinned, approximately independent posterior samples; if there is no error, the rank statistics should be discretely uniformly distributed. 
-The authors suggest examining histograms of the rank statistics to better understand errors rather than conducting a formal test.
-
-\subsection{Rank statistic approach of \cite{gandy_unit_2020}}
-% Rather than conducting a (battery of) two-sample tests, we may take a parametric approach.
-The rank test from \cite{gandy_unit_2020} requires reversibility of the MCMC sampler. It draws a sample $\theta_{l}$ from the prior, with the associated index $l$ drawn uniformly from $\{1,\ldots,\tilde{L}\}$. The sampler is then run forward and backward to generate samples $\theta_{1}, \ldots, \theta_{l-1}$ and $\theta_{l+1}, \ldots, \theta_{\tilde{L}} $. Under the null, the rank statistic of $\theta_{l}$ among the other samples should be uniformly distributed; after many repeated simulations, this is verified using a $\chi^{2}$ test.
-
-
-
-\section{Experiment details}
-\subsection{Experiment 1}
-\subsubsection{Effect of sampler mixing speed}
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\textwidth]{figures/results_1a.png}
-    \caption{Experiment 1 type-I/II error rates against $\sigma_{\epsilon}$, calculated over 1000 trials with a sample size of 250. As $\sigma_{\epsilon}$ increases, autocorrelation in the Gibbs sampler decreases and mixing speed increases. We set $j=5$ for the SC simulator, and $L=500$ for both the SC and BC simulators. For the benchmark Rank test, we set $\tilde{L}=5$.}
-    \label{fig:ex1_auto}
-\end{figure}
-
-\subsubsection{Effect of varying BC simulator burn-in}
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\textwidth]{figures/results_1b.png}
-    \caption{Experiment 1 type-I/II error rates calculated over 1000 trials. The top panels uses the likelihood- and prior-augmented test functions and the bottom panels use the baseline as discussed in the text. We set $\sigma_{\epsilon}^{2}=0.1$.}
-    \label{fig:ex1_auto}
-\end{figure}
-
-\subsection{Experiment 2: Reversible Jump Sampler Implementation}
-\label{appendix:ex2}
-The prior is defined by
-\begin{equation}
-  \pi(\theta|\tau, a, b ) = p(\ell|\lambda) p(\mathbf{\gamma}|\ell) p(\beta_{j} | \tau, \gamma) p(\sigma^{2} | a, b)
-\end{equation}
-where
-\begin{equation}
-  p(\ell|\lambda) = \frac{\exp{(-\lambda)} \lambda^{\ell}}{C\ell!}, \quad \ell \in \{1,\ldots, p\}
-\end{equation}
-\begin{equation}
-  p(\mathbf{\gamma}|\ell) = {p\choose \ell}^{-1}
-\end{equation}
-\begin{equation}
-  p(\beta_{j} | \tau, \gamma ) = \begin{cases} (2\tau)^{-1}\exp(-\frac{|\beta_{j}|}{\tau}) & j \in \mathbf{\gamma} \\ \delta(\beta_{j}) & \text{otherwise} \end{cases}
-\end{equation}
-\begin{equation}
-    p(\sigma^{2} | a, b) = \frac{b^{a}}{\Gamma(a)} (\sigma^{2})^{-a-1} \exp{\left(-\frac{b}{\sigma^{2}}\right)}
-\end{equation}
-$C$ is a normalization constant, $\delta$ is the Dirac delta function, and $\mathbf{\gamma}$ is a vector of the nonzero indices of $\beta$.
-The likelihood is given by
-\begin{equation}
-  p(y | \sigma, \beta, X ) = (2\pi)^{-\frac{n}{2}} \sigma^{-n} \exp{\left(-\frac{\Vert y-X\beta\Vert^{2}_{2}}{2\sigma^{2}}\right)}
-\end{equation}
-The joint probability is then
-\begin{equation}
-    \begin{aligned}
-         p(y, \theta | X ) \propto &\sigma^{-n} \exp{\left(-\frac{\Vert  y-X\beta\Vert^{2}_{2}}{2\sigma^{2}}\right)} \times \\ 
-         & \frac{\exp{(-\lambda)} \lambda^{\ell}}{\ell!} {p\choose \ell}^{-1} \prod_{j\in \mathbf{\gamma}} (2\tau)^{-1}\exp\left(-\frac{|\beta_{j}|}{\tau}\right) \prod_{j' \notin \mathbf{\gamma}} \delta(\beta_{j'}) \frac{b^{a}}{\Gamma(a)} (\sigma^{2})^{-a-1} \exp{\left(-\frac{b}{\sigma^{2}}\right)}
-    \end{aligned}
-    \label{eq:ex2_joint}
-\end{equation}
-
-Each iteration of the reversible-jump MCMC posterior sampler takes two steps in random order. The first is a Gibbs step. By conjugacy,
-\begin{equation}
-    \sigma^{2} | y, X, \beta \sim \mathcal{IG}\left(a + \frac{n}{2}, b + \frac{\sum_{i=1}^{n}(y_{i}-x_{i}\beta)^{2} }{2}\right)
-\end{equation}
-where $x_{i}$ denotes row $i$ of $X$.
-
-The second is a reversible jump step. We start by proposing $\ell' \in \{\ell-1, \ell, \ell+1\}$ uniformly at random, disallowing $\ell<1$ and $\ell>p$. Thus, when $\ell \in \{1,p\}$, there are only two valid proposals, not three. Then, depending on the $\ell'$ proposed, we complete the proposal $\theta'$ via one of the following
-\begin{itemize}
-    \item Update: $\ell' = \ell$
-    \begin{enumerate}
-        \item Choose $j \in \{1, \ldots, \ell\}$ uniformly at random
-        \item Propose $\mathbf{\gamma}' = \mathbf{\gamma}, \beta'_{j} = \beta_{j} + \mathcal{N}(0, \epsilon_{\text{update}}), \beta'_{i \neq j} = \beta_{i}$
-        \item $P(\theta' \rightarrow \theta) = P(\theta \rightarrow \theta')=\mathcal{N}(\beta_{j}'; \beta_{j},\epsilon_{\text{update}})=\mathcal{N}(\beta_{j}; \beta_{j}',\epsilon_{\text{update}})$
-    \end{enumerate}
-\end{itemize}
-
-\begin{itemize}
-    \item Birth: $\ell' = \ell+1$
-    \begin{enumerate}
-        \item Choose $j \in \{\ell+1, \ldots, p\}$ uniformly at random
-        \item Propose $\mathbf{\gamma}' = \mathbf{\gamma} \cup j$
-        \item Propose $\beta'_{j} = \mathcal{N}(0, \epsilon_{\text{birth}}), \beta'_{i \neq j} = \beta_{i}$
-        \item $p(\theta' \rightarrow \theta) = \begin{cases}\frac{1}{2}\frac{1}{\ell'} & \ell'=p \\ \frac{1}{3} \frac{1}{\ell'} & 1<\ell<p \end{cases} $
-        \item $p(\theta \rightarrow \theta') = \begin{cases}\frac{1}{2}\frac{1}{p-\ell} \mathcal{N}(\beta_{j}'; 0,\epsilon_{\text{birth}}) & \ell=1 \\ \frac{1}{3} \frac{1}{p-\ell} \mathcal{N}(\beta_{j}'; 0,\epsilon_{\text{birth}}) & 1<\ell<p \end{cases} $
-    \end{enumerate}
-\end{itemize}
-
-\begin{itemize}
-    \item Death: $\ell' = \ell-1$
-    \begin{enumerate}
-        \item Choose $j \in \{1, \ldots, \ell\}$ uniformly at random
-        \item Propose $\mathbf{\gamma}' = \mathbf{\gamma} \setminus j$ 
-        \item Propose $\beta'_{j} = 0, \beta'_{i \neq j} = \beta_{i}$
-        \item $p(\theta' \rightarrow \theta) = \begin{cases}\frac{1}{2}\frac{1}{p-\ell'} \mathcal{N}(\beta_{j}; 0,\epsilon_{\text{birth}}) & k'=1 \\ \frac{1}{3} \frac{1}{p-\ell'} \mathcal{N}(\beta_{j}; 0,\epsilon_{\text{birth}}) & 1<\ell'<p \end{cases} $
-        \item $p(\theta \rightarrow \theta') = \begin{cases}\frac{1}{2}\frac{1}{\ell} & \ell=p \\ \frac{1}{3} \frac{1}{\ell} & 1<\ell<p \end{cases} $
-    \end{enumerate}
-\end{itemize}
-where $\epsilon_{\text{update}}, \epsilon_{\text{birth}}$ are random walk sizes. We accept proposal $\theta'$ with probability $$A(\theta'|\theta) = \min{\left(\frac{p(y, \theta' | X )}{p(y, \theta | X )} \frac{p(\theta' \rightarrow \theta)}{p(\theta \rightarrow \theta')}, 1\right)}$$
-
-We accept the birth-death proposal $\theta'$ with probability 
-\begin{equation}
-    A(\theta'|\theta) = \min{\left(\frac{p(y, \theta' | X )}{p(y, \theta | X )} \frac{p(\theta' \rightarrow \theta)}{p(\theta \rightarrow \theta')}, 1\right)} \\
-\end{equation}
-
-% \subsection{Experiment 3 Feature Engineering}
-% We derive binary features from the adjacency matrix representation of the sampled graph structure $\mathcal{G}$. As an initial set of features, for all $i,j,i',j'$, we take
-% take each entry $(i,j)$, each $\mathrm{AND}((i,j),(i',j'))$, and each $\mathrm{XOR}((i,j),(i',j'))$. We then prune features that are exactly equal to other features or constant by construction. First, we remove features derived from duplicate edge pairs; for example, we keep only one of \{$\mathrm{AND}((i,j),(i',j'))$, $\mathrm{AND}((i',j'),(i,j))$\}. Next, diagonal entries $(i,i)$ are excluded as they are always zero in acyclic graphs, along with all features derived from pairs with at least one diagonal entry. We also exclude $\mathrm{AND}((i,j),(j,i))$ and $\mathrm{XOR}((i,j),(i,j))$; both are always zero. Finally, we remove $\mathrm{AND}((i,j),(i,j))$ since it is equivalent to $(i,j)$.
+\newpage
+\input{NeurIPS_appendix}
 
 \end{document}
