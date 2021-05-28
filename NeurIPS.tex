@@ -247,7 +247,7 @@ on suprisingly subtle mistakes.
 It has been invoked, for example, by \citet{del_negro_time_2015} and
 \citet{karlsson_corrigendum_2017} to correct two highly cited MCMC
 algorithms in the econometrics literature, over a decade after their
-initial publications.
+initial publication.
 As noted by \citet{grosse_testing_2014}, one may easily check that each of the sampler's steps preserves detailed balance, but a few errors may still slip through. 
 In our own experience, it is often the detection of coding-,
 derivation-, and other ``human'' errors where the Geweke diagnostic really
@@ -256,7 +256,7 @@ mixing diagnostics, not as a replacement.
 
 % \textcolor{red}{remainder of section 1: One (short) paragraph
 %   summarizing what we do}
-In the following, we generalize Geweke's approach by framing it in terms of distance between joint distributions. We discuss a suitable distance, Maximum Mean Discrepancy (MMD), that makes it applicable with minimal user effort whenever a kernel is available for the given problem domain. We combine MMD with two joint sampling methods, yielding two MCMC diagnostic tests, and demonstrate their efficacy relative to the Geweke test and more recent benchmarks in several experiments.
+In the following, we generalize Geweke's approach by framing it in terms of distance between joint distributions. We discuss a suitable distance, the Maximum Mean Discrepancy (MMD), that makes it applicable with minimal user effort whenever a kernel is available for the given problem domain. We combine MMD with two joint sampling methods, yielding two MCMC diagnostic tests, and demonstrate their efficacy relative to the Geweke test and more recent benchmarks in several experiments.
 
 % % Markov chain Monte Carlo (MCMC) is an indispensable tool in modern Bayesian analysis, where a great majority of models have intractable posteriors and require simulation.
 % Suppose we are faced with a Bayesian inference problem. 
@@ -354,9 +354,9 @@ infinite. It is illustrative to
 consider extreme cases: If $d_\mathcal{F}$ is a metric,
 ${d_\mathcal{F}(X,Z)=0}$ implies $X$ and $Z$ are
 identically distributed, and one may asymptotically obtain a perfect test.
-If $\mathcal{F}$ is finite, on the other hand, the proportion of
-type-II errors is bounded away from zero, and will flatten out as sample size
-grows. 
+If $\mathcal{F}$ is finite, on the other hand, 
+there are certain differences in distribution that will never be detected. 
+% the proportion of type-II errors is bounded away from zero, and will flatten out as sample size grows. 
 In practice, the metric property is not essential, since sample size
 is finite. What matters is rather whether one can expect the
 proportion of type-II errors
@@ -364,8 +364,8 @@ to keep decreasing as sample size grows. That requires a nonparametric test;
 the one used in the Geweke diagnostic is parametric.
 
 The obstacle to designing a nonparametric test using $d_\mathcal{F}$
-is the supremum in \eqref{eq:naive-IPM}, which can only be evaluated directly if
-$\mathcal{F}$ is finite.
+is the supremum in \eqref{eq:naive-IPM}, which is generally intractable. 
+% which can only be evaluated directly if $\mathcal{F}$ is finite.
 A nonparametric yet computable test
 can be obtained as follows: fix a reproducing kernel
 Hilbert space $\mathcal{H}$ \cite[see e.g.,][Definition 4.18]{steinwart_support_2008}, with kernel
@@ -409,7 +409,7 @@ When the samples are not i.i.d., as in the case of Markov chains, the permutatio
 \citet{chwialkowski_wild_2014} provide a bootstrap procedure for \eqref{eq:mmd_biased} with correlated samples ($\tau$-mixing processes).
 In this case, we can simulate the null distribution by ``wild bootstrapping'': A wild bootstrap process $\{W_t\}_{t\leq n}$ is a random weight sequence
 given by $W_{t}=\exp(-1/l_n) W_{t-1}+\sqrt{1-\exp(-2/{l_n})}\epsilon_{t}$,
-with $W_{0} \sim \mathcal{N}(0,1)$ and $\epsilon_{t} \sim \mathcal{N}(0,1)$. We then define the wild-bootstrapped MMD
+with $W_{0} \sim \mathcal{N}(0,1)$ and $\epsilon_{t} \sim \mathcal{N}(0,1)$. We then define the wild-bootstrapped MMD as
 \begin{equation}
 \begin{array}{c}
 \widehat{\mathrm{BMMD}^2}=\frac{1}{n^2} \sum_{i,j=1}^{n} W_{i}^{(x)} W_{j}^{(x)} k\left(X_{i}, X_{j}\right)+\frac{1}{n^2} \sum_{i,j=1}^{n} W_{i}^{(y)} W_{j}^{(y)} k\left(Z_{i}, Z_{j}\right) \\
@@ -451,7 +451,8 @@ Below, we summarize the two sampling algorithms, which are put into context in t
         Successive-conditional (SC) & Backward-conditional (BC) \\
     \midrule  
         Initialize $\Theta'_{0} \sim \pi(\theta)$                                      & Repeat: $\Theta'_{i, 0} \sim \pi(\theta), Y'_{i} \sim p(y|\Theta'_{i, 0})$ \\
-    Repeat: $Y'_{i} \sim p(y|\Theta'_{i-1}), \Theta'_{i} \sim q(\theta\given \Theta'_{i-1}, Y'_i)$   & \qquad $\Theta'_{i, l} \sim q(\theta\given \Theta'_{i, l-1}, Y'_i)$ for $l=1,...,L+1$ \\
+    Repeat: $Y'_{i} \sim p(y|\Theta'_{i-1}), \Theta'_{i} \sim q(\theta\given \Theta'_{i-1}, Y'_i)$
+     & \qquad $\Theta'_{i, l} \sim q(\theta\given \Theta'_{i, l-1}, Y'_i)$ for $l=1,...,L+1$ \\
     Keep $\{(Y'_{i}, \Theta'_{i})\given i=L+kt; k=1,2,\ldots; t\geq 1 \}$                     & \qquad Keep $(Y'_{i}, \Theta'_{i,L+1})$ \\[1em]
  \end{tabular}
 }
@@ -460,7 +461,7 @@ Here, $L$ denotes burn-in size, and $t$ the thinning step size. The transition k
 \subsection{Successive-conditional MMD Test}
 Our first method uses the SC algorithm \cite{geweke_getting_2004}:
 % The successive-conditional MMD (MMD-SC) extends the the Geweke test. 
-The SC algorithm draws sequentially from a Markov chain. The chain is initialized from the prior, then run forward by alternating draws from the likelihood, conditioned on the parameters, and the posterior MCMC sampler, conditioned on the data. 
+this draws sequentially from a Markov chain. The chain is initialized from the prior, then run forward by alternating draws from the likelihood, conditioned on the parameters, and the posterior MCMC sampler, conditioned on the data. 
 Each sample consists of a draw from the likelihood and a draw from the posterior sampler.
 We may thin the sample sequence to reduce sequential dependence. 
 For a given significance level $\alpha$ and a bootstrap sample size $B$, the overall test proceeds as follows: 
@@ -487,8 +488,9 @@ The test procedure is as follows:
     \item If $\widehat{\mathrm{MMD}}^{2} \geq c_{\alpha, n}$, reject the null (suspect an error). 
 \end{enumerate}
 Since the samples are all independent, we can use permutation bootstrapping to compute the test threshold as described in \cite{gretton_kernel_2012}. 
-In contrast to the SC algorithm, the backwards-conditional samples can be drawn in parallel, but there is a trade-off: Each sample requires a burn-in period, while the successive-conditional samples require only one burn-in.
-
+In contrast to the SC algorithm, the backwards-conditional samples can be drawn in parallel, but there is a trade-off: each sample requires a burn-in period, while the successive-conditional samples require only one burn-in.
+Note that, if not initialized with the true joint, the test may reject a correct sampler if the burn-in is not sufficient. 
+This property may be used as a heuristic to diagnose convergence, as we can gauge a sufficient burn-in period by running independent tests with different choices of $L$; if the sampler is correct, the $p$-value show grow as $L$ increases. 
 % The two different backward joint distribution sampling algorithms can be succinctly formulated as follows:\\[1em]
 % \makebox[\textwidth][c]{
 %     \begin{tabular}{ll}
@@ -507,7 +509,7 @@ The obvious input values are a data-parameter pair $(y,\theta)$. In Geweke tests
 \[\begin{bmatrix}y,&\theta, & p(y|\theta), & \pi(\theta) \end{bmatrix}^{\top}\;.\]
 The rationale is that, if the posterior represented by the sampler differs from the exact posterior $\pi(\theta|y) \propto p(y\given \theta)\pi(\theta)$, the discrepancy may be detectable in the likelihood and the prior. As we will see in Section \ref{sec:experiments}, this simple heuristic can greatly improve power.
 
-In theory, the MMD test is consistent for any characteristic kernel. Finite-sample performance, however, depends on the specific kernel used (and whether it is characteristic is often of limited practical importance). Poor kernel choice can significantly degrade test performance. For Gaussian and Laplace kernels, for example, an inadequate bandwidth results in an extremely small population MMD \citep{reddi_decreasing_2014}. Problems can be amplified in higher dimensions, which arise in our setting since tests operate on the product of data and parameter space.
+In theory, the MMD test is consistent for any characteristic kernel. Finite-sample performance, however, depends on the specific kernel used (and whether it is characteristic is often of limited practical importance). Poor kernel choice can significantly degrade test performance. For Gaussian and Laplace kernels, for example, a poor choice of bandwidth results in an extremely small population MMD \citep{reddi_decreasing_2014}. Problems can be amplified in higher dimensions, which arise in our setting since tests operate on the product of data and parameter space.
 
 Our experiments do not use kernel model selection methods (which confound results by giving MMD algorithms an unfair advantage), but a few remarks are in order: Cross validation can be used to estimate test power, and hence to maximize it---by optimizing bandwidth \citep{Gretton2012, Sutherland2017}, for example, or by learning bespoke features with a neural network \citep{Liu2020}. Since samples are simulated, the common drawback that cross validation reduces sample size can be offset by additional computation.  
 Cross validation is straightfoward for MMD-BC (and we recommend its use), but more complicated for MMD-SC, where
@@ -554,7 +556,7 @@ This discrepancy requires additional conditions such as differentiability of the
 \section{Experiments}\label{sec:experiments}
 We conduct three experiments to compare the performance of the MMD-SC and MMD-BC tests to several benchmark methods: the Geweke test and the Kolmogorov-Smirnov (KS) and Rank tests from \cite{gandy_unit_2020}. 
 In particular, we wish to verify that our tests' type-II error rates fall relatively quickly with sample size. 
-The experiments below are implemented in Python; in the KS and Rank tests, we apply the implementations of $\chi^{2}$ and two-sample KS tests from \cite{2020SciPy-NMeth}.
+Our experiments are implemented in Python; in the KS and Rank tests, we apply the implementations of $\chi^{2}$ and two-sample KS tests from \cite{2020SciPy-NMeth}.
 We ran experiments on an internal cluster.
 
 Following are details shared by the experiments below.
@@ -615,6 +617,7 @@ For the MMD tests, we consider two kernels based on the inverse quadratic (IMQ) 
 (a) the IMQ kernel with baseline features $g(y, \theta)$; $k_{\mathrm{IMQ}}(g, \tilde{g})$ and 
 (b) the sum of $k_{\mathrm{IMQ}}(g, \tilde{g})$ and an IMQ kernel with auxiliary features $h(y, \theta)$; $k_{\mathrm{IMQ}}(g, \tilde{g}) + k_{\mathrm{IMQ}}(h, \tilde{h})$. 
 Here, we denote $g=g(y, \theta)\coloneqq[y, \theta]^{\top}$ and $\tilde{g}=g(\tilde{y}, \tilde{\theta})$, with $h(y, \theta)\coloneqq[p(y|\theta), \pi(\theta)]^{\top}$ similarly defined. 
+% Note that both kernels $k_{\mathrm{IMQ}}(g, \tilde{g})$ are characteristic \cite{sriperumbudur_universality_2011}.
 The baseline test functions for the benchmark tests are $\begin{bmatrix} \theta_{1}, \theta_{2}, \theta_{1}^{2}, \theta_{1}\theta_{2} \end{bmatrix}^\top,$ and each component of $h(y, \theta)$ is used as an auxiliary test function. 
 The results are plotted in Figure \ref{fig:ex1_aux}. Under each sampler error, inclusion of the auxiliary test functions improves performance across the board. 
 The likelihood and prior capture underlying model structure in a way that is otherwise much more difficult to characterize.
@@ -780,7 +783,7 @@ We have developed a nonparametric extension of Geweke's test using the MMD.
 The advantage of the new test is its simplicity; with a suitable kernel, the test does not require manual specification of test functions and is not limited to Euclidean space, while care needs to be taken otherwise. The trade-off, however, is that characteristic kernels are challenging to compute in certain domains.
 For example, in graphs the delta kernel examining if two graphs are identical is computationally intractable for large graphs. 
 RW kernels, and other fast alternatives, cannot distinguish between isomorphic graphs. 
-With an RW kernel, when the null hypothesis is not rejected even with a large sample, it should be understood that the joint distributions could still have differences indiscernible to the test. 
+With an RW kernel, when the null hypothesis is not rejected, it should be understood that the joint distributions could still have differences indiscernible to the test. 
 In fact, we found that the MMD test with the RW kernel in Section \ref{sec:graphexp} had low power when slightly increasing only the reversal counts in the neighborhood in \eqref{eq:exp_graph_mh}. 
 Such limitations, however, may not matter if the posterior is invariant under graph isomorphisms. 
 In sum, when choosing a kernel, the user should take into account what features the test can distinguish with it, and whether those features are relevant to the problem; the test result should be interpreted accordingly. 
