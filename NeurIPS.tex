@@ -171,11 +171,11 @@
 
 \begin{abstract}
 The Geweke diagnostic is a popular technique that assesses whether a Markov chain
-  algorithm samples a posterior correctly: it
+  algorithm samples a posterior correctly. It
   generates samples from a joint distribution in two ways,
   one that involves the sampler and one that does not, and compares
   the two using a two-sample hypothesis test. 
-  The test detects a variety of errors: lack of
+  The diagnostic detects a variety of errors: lack of
   convergence, but also mistakes in implementation or derivation.
   However, it requires the user to hand-craft a set of test statistics, which makes it 
   challenging to apply to all but the simplest models.
@@ -439,10 +439,10 @@ are independent of each other and samples $\{X_1, \dots, X_n\},$ $\{Z_1, \dots, 
 %     \bottomrule
 %     \end{tabular}
 % \end{table}
-\section{Kernel tests for MCMC}
+\section{Kernel tests for MCMC}\label{sec:proposedtest}
 % Recall that our objective is to check the consistency of the backward joint $\tildepi(\theta \given y) p(y)$, defined by an MCMC sampler for $\tildepi(\theta\given y)$, with the forward joint $p(y\given \theta)\pi(\theta).$
 We have seen that the MMD test can implement Geweke's idea of comparing distributions underlying the samples $\{(Y_1,\Theta_1),\ldots,(Y_n,\Theta_n)\}, $ $\{(Y_1',\Theta_1'),\ldots,(Y_n',\Theta_n')\}, $ from the forward and backward joint distributions. 
-We introduce two concrete tests, which differ in their sampling method for the backward joint distribution and bootstrapping method. 
+In this section, we introduce two concrete tests, which differ in their sampling method for the backward joint distribution and bootstrapping method. 
 % The two backward joint distribution sampling algorithms are summarized below:\\[1em]
 Below, we summarize the two sampling algorithms, which are put into context in the following sections. 
 
@@ -554,14 +554,19 @@ This discrepancy requires additional conditions such as differentiability of the
 \section{Experiments}\label{sec:experiments}
 We conduct three experiments to compare the performance of the MMD-SC and MMD-BC tests to several benchmark methods: the Geweke test and the Kolmogorov-Smirnov (KS) and Rank tests from \cite{gandy_unit_2020}. 
 In particular, we wish to verify that our tests' type-II error rates fall relatively quickly with sample size. 
+The experiments below are implemented in Python; in the KS and Rank tests, we apply the implementations of $\chi^{2}$ and two-sample KS tests from \cite{2020SciPy-NMeth}.
+We ran experiments on an internal cluster.
 
 Following are details shared by the experiments below.
 The significance level $\alpha$ is set to $0.05.$
+The thinning size $t$ is set to $5$ for the SC simulator, and the burn-in size $L=500$ is used for both the SC and BC simulators (see Section \ref{sec:proposedtest} for the notation). 
 For the Geweke test and the tests of \cite{gandy_unit_2020}, 
 we use the Benjamini-Hochberg procedure \citep{benjamini_controlling_1995} for multiple testing correction. 
+For the Geweke test, we set the window size used in variance estimation to $8\%$ of the sample size, as suggested in \cite{geweke_using_1999}.
 For the MMD tests only,
 we normalize real-valued features by dividing each feature by the corresponding pooled standard deviation before applying the kernel function. We use $B=300$ bootstrap samples for all bootstrapping procedures. 
-For the Rank test, we generate $n$ rank statistics. We ran experiments on an internal cluster.
+For the Rank test, we generate $n$ rank statistics, where each statistic is computed with $\tilde{L}=5$ samples.
+
 
 \subsection{Gibbs Sampling}
 We first evaluate test performance using a model from \cite{gandy_unit_2020}. 
@@ -609,7 +614,7 @@ To illustrate the importance of the auxiliary features (see Section \ref{sec:ker
 For the MMD tests, we consider two kernels based on the inverse quadratic (IMQ) kernel $k_{\text{IMQ}}(x, x') = (c^{2} + \Vert x - x' \Vert_{2}^{2})^{-\beta}$ with $c=1$ and $\beta=1/2:$ 
 (a) the IMQ kernel with baseline features $g(y, \theta)$; $k_{\mathrm{IMQ}}(g, \tilde{g})$ and 
 (b) the sum of $k_{\mathrm{IMQ}}(g, \tilde{g})$ and an IMQ kernel with auxiliary features $h(y, \theta)$; $k_{\mathrm{IMQ}}(g, \tilde{g}) + k_{\mathrm{IMQ}}(h, \tilde{h})$. 
-Here, we denote $g=g(y, \theta)\coloneqq[y, \theta]^{\top}$ and $\tilde{g}=g(\tilde{y}, \tilde{\theta})$, with $h(y, \theta)\coloneqq[p(y|\theta), \pi(\theta)]$ similarly defined. 
+Here, we denote $g=g(y, \theta)\coloneqq[y, \theta]^{\top}$ and $\tilde{g}=g(\tilde{y}, \tilde{\theta})$, with $h(y, \theta)\coloneqq[p(y|\theta), \pi(\theta)]^{\top}$ similarly defined. 
 The baseline test functions for the benchmark tests are $\begin{bmatrix} \theta_{1}, \theta_{2}, \theta_{1}^{2}, \theta_{1}\theta_{2} \end{bmatrix}^\top,$ and each component of $h(y, \theta)$ is used as an auxiliary test function. 
 The results are plotted in Figure \ref{fig:ex1_aux}. Under each sampler error, inclusion of the auxiliary test functions improves performance across the board. 
 The likelihood and prior capture underlying model structure in a way that is otherwise much more difficult to characterize.
@@ -620,8 +625,7 @@ The likelihood and prior capture underlying model structure in a way that is oth
     \caption{
         Experiment 1 type-I/II error rates of BC tests with varying test functions over 1000 trials. 
         The red flat line in the left panel indicates the significance level $\alpha=0.05$. 
-        For the BC simulator, we set the burn-in size $L=500$.
-        The Rank test computes a rank statistic based on $\tilde{L}=5$ samples.
+        % For the BC simulator, we set the burn-in size $L=500$.
     }
     \label{fig:ex1_aux}
 \end{figure}
@@ -631,14 +635,14 @@ We observed that when $\sigma_{\epsilon} \ll \sigma$, the sample autocorrelation
 \subsection{Reversible-jump Bayesian Lasso}
 \label{section:ex2}
 We next consider a Bayesian Lasso model similar to \cite{chen_bayesian_2011}. 
-Here, for a fixed design matrix $\mathbf{X}\in \mathbb{R}^{m\times d}$ with $m, d \geq 1,$ we model its associated outcome variable $Y$ with  
+Here, for a fixed design matrix $\mathbf{X}\in \mathbb{R}^{m\times d}$ with $m, d \geq 1,$ we model its outcome variable $Y$ with  
 a linear regression model
 \begin{equation}
     Y = \mathbf{X}{\beta} + \mathbf{\epsilon}, \quad \mathbf{\epsilon} \sim \mathcal{N}(\mathbf{0}, \sigma^{2} \mathbf{I}), 
     \label{eq:ex2}
 \end{equation}
 where ${\beta} = [\beta_1, \dots, \beta_d]^{\top} \in \mathbb{R}^d$ are sparse coefficients, $\sigma>0,$ and $\mathbf{I}$ is the identity matrix. 
-To define a Bayesian model, we place a truncated Poisson prior on the number $\ell$ of nonzero elements in $\beta$ and an inverse-gamma prior on $\sigma^{2}$ with hyperparameters $a, b$. 
+To define a Bayesian model, we place a truncated Poisson prior with hyperparameter $\lambda$ on the number $\ell$ of nonzero elements in $\beta$ and an inverse-gamma prior on $\sigma^{2}$ with hyperparameters $a, b$. 
 The model draws a combination $\gamma$ of $\ell$ integers from $\{1,\dots, d\}$, uniformly from all the combinations, to choose nonzero coefficients $\{\beta_{j}\}_{j\in \gamma}$.
 The selected weights $\{\beta_{j}\}_{j\in \gamma}$ are then independently drawn from a Laplace distribution with scale $\tau$. 
 
@@ -652,16 +656,16 @@ We implement a reversible-jump step \citep{green_reversible_1995} based on \cite
 The reversible jump random walk sizes are set to $\epsilon_\text{update}= \epsilon_\text{birth}=1$. Each iteration of the reversible-jump MCMC posterior sampler takes two steps in random order. A Gibbs step updates $\sigma^{2}$, which is straightforward due to the conjugacy of the inverse gamma prior on $\sigma^{2}$. A reversible-jump step traverses parameter spaces with varying $\ell$. 
 We accept the birth-death proposal $\tilde{\theta}$ with probability 
 \begin{equation}
-    A(\tilde{\theta}|\theta) = \min{\left(\frac{p(y, \tilde{\theta} | X, \tau, a, b )}{p(y, \theta | X, \tau, a, b )} \frac{p(\tilde{\theta} \rightarrow \theta)}{p(\theta \rightarrow \tilde{\theta})}, 1\right)}.
+    A(\tilde{\theta}|\theta) = \min{\left(\frac{p(y, \tilde{\theta} | X, \lambda, \tau, a, b)}{p(y, \theta | X, \lambda, \tau, a, b )} \frac{p(\tilde{\theta} \rightarrow \theta)}{p(\theta \rightarrow \tilde{\theta})}, 1\right)}.
 \end{equation}
 
-We introduce two errors into the the posterior sampler: One affects the Metropolis-Hastings acceptance probabilities used in the birth/death moves; it omits the jump probabilities $p(\tilde{\theta} \rightarrow \theta), p(\theta \rightarrow \tilde{\theta})$ from the calculation. The second error affects all of the Metropolis-Hastings acceptance probabilities. The truncated Poisson factors $p(\ell|\lambda)$  of the joint probabilities have incorrect denominator $(\ell-1)!$ rather than $\ell!$. In summary:
+We introduce two errors into the the posterior sampler: One affects the Metropolis-Hastings acceptance probabilities used in the birth/death moves; it omits the jump probabilities $p(\tilde{\theta} \rightarrow \theta), p(\theta \rightarrow \tilde{\theta})$ from the calculation. The second error affects all of the Metropolis-Hastings acceptance probabilities. The truncated Poisson factors $p(\ell|\lambda)$  of the joint probabilities have incorrect denominator $(\ell-1)!$ rather than $\ell!$. In summary, for $\nu=(\lambda, \tau, a, b )$:
 \begin{center}
    \begin{tabular}{llll}
                   Error & Components & Incorrect & Correct \\
     \midrule  
-         Transition & $A_{\text{birth}}(\tilde{\theta}|\theta)$, $A_{\text{death}}(\tilde{\theta}|\theta)$  &  $\ldots\frac{p(y, \tilde{\theta} | X )}{p(y, \theta | X )}\ldots$ & $\ldots\frac{p(y, \tilde{\theta} | X )}{p(y, \theta | X )} \frac{p(\tilde{\theta} \rightarrow \theta)}{p(\theta \rightarrow \tilde{\theta})}\ldots$\\
-         Poisson & $p(y, \tilde{\theta} | X )$, $p(y, \theta | X )$ & $\ldots \frac{\exp{(-\lambda)} \lambda^{\ell}}{(\ell-1)!} \ldots$ & $\ldots \frac{\exp{(-\lambda)} \lambda^{\ell}}{\ell!} \ldots$ \\
+         Transition & $A_{\text{birth}}(\tilde{\theta}|\theta)$, $A_{\text{death}}(\tilde{\theta}|\theta)$  &  $\ldots\frac{p(y, \tilde{\theta} | X, \nu )}{p(y, \theta | X, \nu )}\ldots$ & $\ldots\frac{p(y, \tilde{\theta} | X, \nu )}{p(y, \theta | X, \nu)} \frac{p(\tilde{\theta} \rightarrow \theta)}{p(\theta \rightarrow \tilde{\theta})}\ldots$\\
+         Poisson & $p(y, \tilde{\theta} | X, \nu)$, $p(y, \theta | X, \nu )$ & $\ldots \frac{\exp{(-\lambda)} \lambda^{\ell}}{(\ell-1)!} \ldots$ & $\ldots \frac{\exp{(-\lambda)} \lambda^{\ell}}{\ell!} \ldots$ \\
 \end{tabular}
 \end{center}    
 
@@ -689,7 +693,9 @@ The results are shown in Figure \ref{fig:ex2_comparison}. The autocorrelation in
     \includegraphics[width=\textwidth]{figures/results_2.png}
     \caption{Experiment 2 type-I/II error rates over 1000 trials. 
     The red flat line in the left panel indicates the significance level $\alpha=0.05$. 
-    We set the thinning size $t=5$ for the SC simulator, and $L=500$ for both the SC and BC simulators. For the Rank test, we set the burn-in size $\tilde{L}=5$. We set the Geweke window size to $8\%$ of the sample size.
+    % We set the thinning size $t=5$ for the SC simulator, and $L=500$ for both the SC and BC simulators. 
+    % The Rank test uses $\tilde{L}=5$ samples to compute a rank statistic.
+    % We set the Geweke window size to $8\%$ of the sample size.
     }
     \label{fig:ex2_comparison}
 \end{figure}
@@ -710,18 +716,18 @@ Given a DAG $\mathcal{G}$, we draw each root node variable from $\mathcal{N}(0, 
 % The likelihood is thus $    p(y|\mathcal{G}) = \prod_{j=1}^{n}  p(y_{j}|\mathcal{G}) = \prod_{j=1}^{n} p(y_{j}|\mathbf{pa}(y_{j}))$.
 
 To infer $\mathcal{G}$ given observed data, we use the MCMC algorithm detailed in Section 2 of \cite{grzegorczyk_improving_2008}; 
-Given a structure $\mathcal{G}$, the proposal structure $\mathcal{G}'$ is sampled uniformly from the neighborhood $\mathbf{Ne}(\mathcal{G})$, the union of $\mathcal{G}$ and the set of all DAGs that can be reached by adding, deleting, or reversing an edge. 
+Given a structure $\mathcal{G}$, the proposal structure $\tilde{\mathcal{G}}$ is sampled uniformly from the neighborhood $\mathbf{Ne}(\mathcal{G})$, the union of $\mathcal{G}$ and the set of all DAGs that can be reached by adding, deleting, or reversing an edge. 
 We consider a sampler error affecting the Metropolis-Hastings acceptance probability
 \begin{equation}
 A(\tilde{\mathcal{G}}|\mathcal{G}) = \min{\left(\frac{p(y|\tilde{\mathcal{G}})|\mathbf{Ne}(\mathcal{G})|}{p(y|\mathcal{G})|\mathbf{Ne}(\tilde{\mathcal{G}})|}, 1\right)}. \label{eq:exp_graph_mh}
 \end{equation}
-Specifically, it alters the calculation of the number of the neighborhood nodes $|\mathbf{Ne}(\mathcal{G})|$: we count all \textit{graphs} that can be reached by modifying a single edge, regardless of whether the modification induces a cycle. 
+Specifically, it alters the calculation of the number of the neighborhood nodes $|\mathbf{Ne}(\mathcal{G})|$: we count all \textit{graphs} that can be reached by modifying a single edge, regardless of whether the modification induces a cycle. In summary:
 \begin{center}
     \begin{tabular}{llll}
     Error & Components & Incorrect & Correct \\
     \midrule  
-         Cyclic Check & $|\mathbf{Ne}(\mathcal{G})|, |\mathbf{Ne}(\mathcal{G}')|$ & Count graph neighbors & Count DAG neighbors \\
-        %  Rev Count & $|\mathbf{Ne}(\mathcal{G})|, |\mathbf{Ne}(\mathcal{G}')|$ & Count reversals twice & Count reversals once \\
+         Cyclic Check & $|\mathbf{Ne}(\mathcal{G})|, |\mathbf{Ne}(\tilde{\mathcal{G}})|$ & Count graph neighbors & Count DAG neighbors \\
+        %  Rev Count & $|\mathbf{Ne}(\mathcal{G})|, |\mathbf{Ne}(\tilde{\mathcal{G}})|$ & Count reversals twice & Count reversals once \\
     \end{tabular}
 \end{center}
 % In the first error, we count all \textit{graphs} that can be reached by modifying a single edge, regardless of whether the modification induces a cycle. In the subtler second error, we double-count the DAGs that can be reached by reversing an edge. 
@@ -734,8 +740,8 @@ Specifically, it alters the calculation of the number of the neighborhood nodes 
 %     \toprule
 %           Error & Components & Incorrect & Correct \\
 %     \midrule  
-%          Cyclic Check & $|\mathbf{Ne}(\mathcal{G})|, |\mathbf{Ne}(\mathcal{G}')|$ & Count graph neighbors & Count DAG neighbors \\
-%         %  Rev Count & $|\mathbf{Ne}(\mathcal{G})|, |\mathbf{Ne}(\mathcal{G}')|$ & Count reversals twice & Count reversals once \\
+%          Cyclic Check & $|\mathbf{Ne}(\mathcal{G})|, |\mathbf{Ne}(\tilde{\mathcal{G}})|$ & Count graph neighbors & Count DAG neighbors \\
+%         %  Rev Count & $|\mathbf{Ne}(\mathcal{G})|, |\mathbf{Ne}(\tilde{\mathcal{G}})|$ & Count reversals twice & Count reversals once \\
 %     \bottomrule
 %     \end{tabular}
 % \end{table}
@@ -759,7 +765,8 @@ As an idealized benchmark in the graph space, we include a $\chi^{2}$ test of ba
     \includegraphics[width=\textwidth]{figures/results_3.png}
     \caption{Experiment 3 type-I/II error rates over 500 trials. 
     The red flat line in the left panel indicates the significance level $\alpha=0.05$. 
-    The thinning size $t$ is set to $5$ for the SC simulator, and the burn-in size $L=500$ is used for both the SC and BC simulators. The Geweke window size was set to $8\%$ of the sample size. 
+    % The thinning size $t$ is set to $5$ for the SC simulator, and the burn-in size $L=500$ is used for both the SC and BC simulators. 
+    % The window size for the Geweke test was set to $8\%$ of the sample size. 
     }
     % For the Geweke test, we use a subset of the the first and second moments of these parameters as test functions; all moments that must be zero for the graph to be cyclic are excluded.
     \label{fig:ex3_comparison}
@@ -777,7 +784,7 @@ With an RW kernel, when the null hypothesis is not rejected even with a large sa
 In fact, we found that the MMD test with the RW kernel in Section \ref{sec:graphexp} had low power when slightly increasing only the reversal counts in the neighborhood in \eqref{eq:exp_graph_mh}. 
 Such limitations, however, may not matter if the posterior is invariant under graph isomorphisms. 
 In sum, when choosing a kernel, the user should take into account what features the test can distinguish with it, and whether those features are relevant to the problem; the test result should be interpreted accordingly. 
-Finally, the test inherits limitations and caveats of frequentist hypothesis testing; e.g., the $p$-value is not the probability of the null hypothesis being true, and non-rejection of the null does not imply that the null is true. 
+Finally, the test inherits limitations and caveats of frequentist hypothesis testing \cite{lehmann_testing_2005, Wasserstein_2016}; e.g., the $p$-value is not the probability of the null hypothesis being true, and non-rejection of the null does not imply that the null is true. 
 % The advantage of the MMD tests here is its simplicity; we can apply the same tests in $\mathbb{R}^{d}$, graph space, or a mix of the two; all we need to do is change the kernel. 
 % In fact, random walk kernels cannot distinguish between isomorphic graphs.
 % The primary concern outside of $\mathbb{R}^{d}$ is that, if we do not have access to characteristic kernels, the consistency of the MMD tests is not guaranteed.
